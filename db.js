@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS admins (
 CREATE TABLE IF NOT EXISTS otps (
   target TEXT PRIMARY KEY,
   code TEXT,
-  expires INTEGER
+  expires BIGINT
 );
 CREATE TABLE IF NOT EXISTS audit (
   seq INTEGER PRIMARY KEY ${'$'}{AUTOINC},
@@ -110,6 +110,10 @@ async function init() {
   for (const stmt of ddl.split(';').map(s => s.trim()).filter(Boolean)) {
     await query(stmt);
   }
-}
+  // migration: fix the OTP expiry column on databases created before this fix
+  if (engine === 'postgres') {
+    try { await query('ALTER TABLE otps ALTER COLUMN expires TYPE BIGINT'); } catch (e) {}
+  }
+}  
 
 module.exports = { query, init, engine, DATA_DIR };
