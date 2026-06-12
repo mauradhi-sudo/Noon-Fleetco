@@ -14,6 +14,18 @@ const mailer = require('./mailer');
 const gdrive = require('./drive');
 
 const app = express();
+
+// Never let one bad request kill the server; always answer with readable JSON errors.
+process.on('unhandledRejection', (e) => console.error('UNHANDLED REJECTION:', e));
+process.on('uncaughtException', (e) => console.error('UNCAUGHT EXCEPTION:', e));
+for (const m of ['get', 'post', 'put', 'patch', 'delete']) {
+  const orig = app[m].bind(app);
+  app[m] = (route, ...handlers) => orig(route, ...handlers.map(h =>
+    typeof h === 'function'
+      ? (req, res, next) => { const r = h(req, res, next); if (r && r.catch) r.catch(next); }
+      : h));
+}
+
 const PORT = +(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
   const p = path.join(DATA_DIR, '.jwt_secret');
@@ -90,7 +102,7 @@ async function issueOtp(target) {
 async function checkOtp(target, code) {
   const { rows } = await query('SELECT * FROM otps WHERE target = ?', [target]);
   if (!rows.length) return false;
-  if (rows[0].expires < Date.now()) return false;
+  if (+rows[0].expires < Date.now()) return false;
   if (rows[0].code !== String(code)) return false;
   await query('DELETE FROM otps WHERE target = ?', [target]);
   return true;
@@ -161,7 +173,6 @@ app.get('/api/employees/:id', auth, async (req, res) => {
 
 async function upsertEmployee(body, existingId) {
   const id = existingId || uid('E');
-  const { empId, passportNo, name, email, status, ...rest } = body;
   if (existingId) {
     const { rows } = await query('SELECT * FROM employees WHERE id = ?', [existingId]);
     const cur = rows.length ? rowToEmp(rows[0]) : {};
@@ -172,7 +183,7 @@ async function upsertEmployee(body, existingId) {
   }
   const full = Object.assign({ id, status: 'Active' }, body);
   await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, empId, passportNo || '', name || '', email || '', full.status, JSON.stringify(full)]);
+    [id, full.empId, full.passportNo || '', full.name || '', full.email || '', full.status, JSON.stringify(full)]);
   return full;
 }
 
@@ -240,7 +251,6 @@ app.post('/api/leaves', auth, async (req, res) => {
   const { rows } = await query('SELECT * FROM employees WHERE id = ?', [employeeId]);
   if (!rows.length) return res.status(404).json({ error: 'Employee not found' });
   const e = rowToEmp(rows[0]);
-  // probation: 6 months from joining
   if (e.joiningDate && (Date.now() - new Date(e.joiningDate)) / 864e5 < 182)
     return res.status(403).json({ error: 'Leave applications are locked during the 6-month probation period' });
   const id = uid('L');
@@ -309,7 +319,6 @@ app.get('/api/documents', auth, async (req, res) => {
   }
   if (!can(req, 'view_documents')) return res.status(403).json({ error: 'No permission' });
   const { rows } = await query('SELECT * FROM documents', []);
-  // attach employee names
   const emps = await query('SELECT id, name FROM employees', []);
   const nameById = Object.fromEntries(emps.rows.map(e => [e.id, e.name]));
   res.json(rows.map(d => Object.assign(docOut(d), { empName: nameById[d.employeeid ?? d.employeeId] || '' })));
@@ -390,7 +399,6 @@ app.get('/api/audit', auth, superOnly, async (req, res) => {
   res.json(rows.map(r => ({ t: r.t, user: r.usr, action: r.action })));
 });
 app.post('/api/audit', auth, async (req, res) => {
-  // client-side convenience logging (e.g. exports); server actions are logged server-side anyway
   if (req.body.action) await audit(req.user.name, String(req.body.action).slice(0, 300));
   res.json({ ok: true });
 });
@@ -425,8 +433,14 @@ app.post('/api/backup', auth, superOnly, async (req, res) => { await makeBackup(
 /* ───────────────────────── start ───────────────────────── */
 app.get('/api/health', (req, res) => res.json({ ok: true, engine, drive: gdrive.configured(), email: mailer.configured }));
 
+// JSON error responses (placed after all routes)
+app.use((err, req, res, next) => {
+  console.error('API error on', req.method, req.path, '—', err.message);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Server error: ' + (err.message || 'unknown') });
+});
+
 init().then(async () => {
-  // ensure super admin exists
   const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase();
   const { rows } = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []);
   if (!rows.length) {
@@ -435,6 +449,9 @@ init().then(async () => {
     console.log('Created super admin:', email);
   }
   app.listen(PORT, () => console.log(`Noon Fleet HRMS running on http://localhost:${PORT}  (db: ${engine}, email: ${mailer.configured ? 'SMTP' : 'DEV MODE'}, drive: ${gdrive.configured() ? 'ON' : 'off'})`));
+}).catch(e => {
+  console.error('STARTUP FAILED:', e);
+  process.exit(1);
 });
 
 module.exports = app;

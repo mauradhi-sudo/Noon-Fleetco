@@ -14,16 +14,31 @@ let engine;
 if (process.env.DATABASE_URL) {
   engine = 'postgres';
   const { Pool } = require('pg');
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false },
-  });
-  // translate ? placeholders to $1..$n
+  // SSL auto-detect: try with SSL first; if the server rejects SSL (e.g. Render
+  // internal URLs), transparently retry without it. Override with PGSSL=true/false.
+  let sslMode = process.env.PGSSL === 'false' ? false
+    : process.env.PGSSL === 'true' ? { rejectUnauthorized: false }
+    : undefined; // auto
+  let pool = null;
+  const mkPool = (ssl) => new Pool({ connectionString: process.env.DATABASE_URL, ssl });
   query = async (sql, params = []) => {
     let i = 0;
     const pgSql = sql.replace(/\?/g, () => '$' + (++i));
-    const res = await pool.query(pgSql, params);
-    return { rows: res.rows };
+    if (!pool) pool = mkPool(sslMode === undefined ? { rejectUnauthorized: false } : sslMode);
+    try {
+      const res = await pool.query(pgSql, params);
+      return { rows: res.rows };
+    } catch (e) {
+      if (sslMode === undefined && /ssl/i.test(e.message || '')) {
+        console.warn('Postgres rejected SSL — retrying without SSL');
+        sslMode = false;
+        try { await pool.end(); } catch {}
+        pool = mkPool(false);
+        const res = await pool.query(pgSql, params);
+        return { rows: res.rows };
+      }
+      throw e;
+    }
   };
 } else {
   engine = 'sqlite';
