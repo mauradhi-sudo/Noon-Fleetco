@@ -114,7 +114,13 @@ app.post('/api/auth/admin/request-otp', async (req, res) => {
   const { rows } = await query('SELECT * FROM admins WHERE LOWER(email) = ?', [email]);
   if (!rows.length) return res.status(404).json({ error: 'No admin account found for that email address' });
   const code = await issueOtp('admin:' + email);
-  const sent = await mailer.sendOtp(email, code);
+  let sent;
+  try {
+    sent = await mailer.sendOtp(email, code);
+  } catch (e) {
+    console.error('Admin OTP send failed:', e.message);
+    return res.status(503).json({ error: 'Failed to send login code. Please try again later.' });
+  }
   res.json({ message: 'OTP sent to ' + email, ...(sent.dev ? { _devOtp: code } : {}) });
 });
 
@@ -137,7 +143,13 @@ app.post('/api/auth/employee/login', async (req, res) => {
   const e = rowToEmp(rows[0]);
   if (!e.email) return res.status(400).json({ error: 'No registered email on your profile — contact HR to add one' });
   const code = await issueOtp('emp:' + e.empId);
-  const sent = await mailer.sendOtp(e.email, code);
+  let sent;
+  try {
+    sent = await mailer.sendOtp(e.email, code);
+  } catch (e) {
+    console.error('Employee OTP send failed:', e.message);
+    return res.status(503).json({ error: 'Failed to send login code. Please try again later.' });
+  }
   const masked = e.email.replace(/^(..).*(@.*)$/, '$1•••$2');
   res.json({ otpRequired: true, message: 'OTP sent to ' + masked, email: masked, ...(sent.dev ? { _devOtp: code } : {}) });
 });
