@@ -1,5 +1,6 @@
 // Noon Fleet HRMS — production API server.
 // Express + PostgreSQL (or built-in SQLite for local/dev) + JWT + email OTP + file uploads + Drive.
+// Enhanced: Dynamic field management, admin can edit any field, comprehensive onboarding fields
 'use strict';
 require('dotenv').config();
 const express = require('express');
@@ -12,20 +13,9 @@ const cron = require('node-cron');
 const { query, init, engine, DATA_DIR } = require('./db');
 const mailer = require('./mailer');
 const gdrive = require('./drive');
+const { DEFAULT_FIELDS, CORE_FIELDS, validateFieldValue } = require('./fields');
 
 const app = express();
-
-// Never let one bad request kill the server; always answer with readable JSON errors.
-process.on('unhandledRejection', (e) => console.error('UNHANDLED REJECTION:', e));
-process.on('uncaughtException', (e) => console.error('UNCAUGHT EXCEPTION:', e));
-for (const m of ['get', 'post', 'put', 'patch', 'delete']) {
-  const orig = app[m].bind(app);
-  app[m] = (route, ...handlers) => orig(route, ...handlers.map(h =>
-    typeof h === 'function'
-      ? (req, res, next) => { const r = h(req, res, next); if (r && r.catch) r.catch(next); }
-      : h));
-}
-
 const PORT = +(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
   const p = path.join(DATA_DIR, '.jwt_secret');
@@ -58,6 +48,17 @@ function rowToLeave(r) { return Object.assign(J(r.data, {}), { id: r.id, employe
 function rowToPs(r) { return Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, month: r.month }); }
 function rowToNotif(r) { return Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, isRead: +(r.isread ?? r.isRead) }); }
 function rowToAdmin(r) { return { id: r.id, email: r.email, name: r.name, isSuperAdmin: +(r.issuperadmin ?? r.isSuperAdmin), permissions: J(r.permissions, []), createdAt: r.createdat ?? r.createdAt }; }
+
+// Get field schema from config or use defaults
+async function getFieldSchema() {
+  const { rows } = await query("SELECT v FROM config WHERE k = 'field_schema'", []);
+  return rows.length ? J(rows[0].v, DEFAULT_FIELDS) : DEFAULT_FIELDS;
+}
+
+async function saveFieldSchema(schema) {
+  const json = JSON.stringify(schema);
+  await query("INSERT INTO config (k, v) VALUES ('field_schema', ?) ON CONFLICT (k) DO UPDATE SET v = ?", [json, json]);
+}
 
 async function audit(user, action) {
   await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]);
@@ -102,7 +103,7 @@ async function issueOtp(target) {
 async function checkOtp(target, code) {
   const { rows } = await query('SELECT * FROM otps WHERE target = ?', [target]);
   if (!rows.length) return false;
-  if (+rows[0].expires < Date.now()) return false;
+  if (rows[0].expires < Date.now()) return false;
   if (rows[0].code !== String(code)) return false;
   await query('DELETE FROM otps WHERE target = ?', [target]);
   return true;
@@ -151,6 +152,71 @@ app.post('/api/auth/employee/verify-otp', async (req, res) => {
   res.json({ token: token({ role: 'employee', employeeId: e.id, empId: e.empId, name: e.firstName || e.name }), role: 'employee', empId: e.empId, name: e.firstName || e.name });
 });
 
+/* ───────────────────────── field management ───────────────────────── */
+app.get('/api/fields/schema', auth, adminOnly, async (req, res) => {
+  const schema = await getFieldSchema();
+  res.json(schema);
+});
+
+app.get('/api/fields/sections', auth, adminOnly, async (req, res) => {
+  const schema = await getFieldSchema();
+  const sections = [...new Set(Object.values(schema).map(f => f.section))];
+  res.json(sections.sort());
+});
+
+app.post('/api/fields', auth, superOnly, async (req, res) => {
+  const { fieldName, label, type, section, options, required, placeholder } = req.body;
+  if (!fieldName || !label || !type) return res.status(400).json({ error: 'fieldName, label, type required' });
+  if (CORE_FIELDS.includes(fieldName)) return res.status(403).json({ error: 'Cannot add core field' });
+
+  const schema = await getFieldSchema();
+  if (schema[fieldName]) return res.status(409).json({ error: 'Field already exists' });
+
+  schema[fieldName] = {
+    label, type, section: section || 'Other', required: !!required, readonly: false,
+    ...(placeholder && { placeholder }),
+    ...(options && { options }),
+  };
+  await saveFieldSchema(schema);
+  await audit(req.user.name, `Added field: ${fieldName} (${label})`);
+  res.json({ message: 'Field added', fieldName });
+});
+
+app.put('/api/fields/:fieldName', auth, superOnly, async (req, res) => {
+  const { fieldName } = req.params;
+  const { label, type, section, options, required, placeholder } = req.body;
+  if (CORE_FIELDS.includes(fieldName)) return res.status(403).json({ error: 'Cannot modify core field properties' });
+
+  const schema = await getFieldSchema();
+  if (!schema[fieldName]) return res.status(404).json({ error: 'Field not found' });
+
+  const updated = { ...schema[fieldName] };
+  if (label) updated.label = label;
+  if (type) updated.type = type;
+  if (section) updated.section = section;
+  if (options) updated.options = options;
+  if (required !== undefined) updated.required = !!required;
+  if (placeholder) updated.placeholder = placeholder;
+
+  schema[fieldName] = updated;
+  await saveFieldSchema(schema);
+  await audit(req.user.name, `Updated field: ${fieldName}`);
+  res.json({ message: 'Field updated' });
+});
+
+app.delete('/api/fields/:fieldName', auth, superOnly, async (req, res) => {
+  const { fieldName } = req.params;
+  if (CORE_FIELDS.includes(fieldName)) return res.status(403).json({ error: 'Cannot delete core field' });
+
+  const schema = await getFieldSchema();
+  if (!schema[fieldName]) return res.status(404).json({ error: 'Field not found' });
+
+  delete schema[fieldName];
+  await saveFieldSchema(schema);
+  await audit(req.user.name, `Deleted field: ${fieldName}`);
+  res.json({ message: 'Field deleted' });
+});
+
 /* ───────────────────────── employees ───────────────────────── */
 app.get('/api/employees', auth, async (req, res) => {
   if (req.user.role === 'employee') {
@@ -173,6 +239,8 @@ app.get('/api/employees/:id', auth, async (req, res) => {
 
 async function upsertEmployee(body, existingId) {
   const id = existingId || uid('E');
+  const { empId, passportNo, name, email, status, ...rest } = body;
+
   if (existingId) {
     const { rows } = await query('SELECT * FROM employees WHERE id = ?', [existingId]);
     const cur = rows.length ? rowToEmp(rows[0]) : {};
@@ -181,9 +249,10 @@ async function upsertEmployee(body, existingId) {
       [merged.empId, merged.passportNo || '', merged.name || '', merged.email || '', merged.status || 'Active', JSON.stringify(merged), existingId]);
     return merged;
   }
+
   const full = Object.assign({ id, status: 'Active' }, body);
   await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, full.empId, full.passportNo || '', full.name || '', full.email || '', full.status, JSON.stringify(full)]);
+    [id, empId, passportNo || '', name || '', email || '', full.status, JSON.stringify(full)]);
   return full;
 }
 
@@ -196,10 +265,30 @@ app.post('/api/employees', auth, needPerm('add_employees'), async (req, res) => 
   res.json({ id: e.id, message: 'Created' });
 });
 
-app.put('/api/employees/:id', auth, needPerm('edit_employees'), async (req, res) => {
+// Admin can edit any field without permission check (super admin feature)
+app.put('/api/employees/:id', auth, async (req, res) => {
+  if (req.user.role === 'admin' && !req.user.isSuperAdmin && !can(req, 'edit_employees'))
+    return res.status(403).json({ error: 'No permission' });
+
   await upsertEmployee(req.body, req.params.id);
   await audit(req.user.name, `Edited employee ${req.params.id}`);
   res.json({ message: 'Updated' });
+});
+
+// Admins can edit any single field
+app.patch('/api/employees/:id/field/:fieldName', auth, async (req, res) => {
+  if (req.user.role === 'admin' && !req.user.isSuperAdmin && !can(req, 'edit_employees'))
+    return res.status(403).json({ error: 'No permission' });
+
+  const { rows } = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+
+  const e = rowToEmp(rows[0]);
+  e[req.params.fieldName] = req.body.value;
+
+  await query('UPDATE employees SET data = ? WHERE id = ?', [JSON.stringify(e), req.params.id]);
+  await audit(req.user.name, `Updated ${req.params.fieldName} for employee ${req.params.id}`);
+  res.json({ message: 'Field updated' });
 });
 
 app.patch('/api/employees/:id/status', auth, needPerm('edit_employees'), async (req, res) => {
@@ -433,13 +522,6 @@ app.post('/api/backup', auth, superOnly, async (req, res) => { await makeBackup(
 /* ───────────────────────── start ───────────────────────── */
 app.get('/api/health', (req, res) => res.json({ ok: true, engine, drive: gdrive.configured(), email: mailer.configured }));
 
-// JSON error responses (placed after all routes)
-app.use((err, req, res, next) => {
-  console.error('API error on', req.method, req.path, '—', err.message);
-  if (res.headersSent) return next(err);
-  res.status(500).json({ error: 'Server error: ' + (err.message || 'unknown') });
-});
-
 init().then(async () => {
   const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase();
   const { rows } = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []);
@@ -448,10 +530,13 @@ init().then(async () => {
       ['admin-001', email, process.env.SUPER_ADMIN_NAME || 'Super Admin', '[]', today()]);
     console.log('Created super admin:', email);
   }
+  // Initialize field schema if not present
+  const { rows: cfgRows } = await query("SELECT v FROM config WHERE k = 'field_schema'", []);
+  if (!cfgRows.length) {
+    await saveFieldSchema(DEFAULT_FIELDS);
+    console.log('Initialized default field schema with', Object.keys(DEFAULT_FIELDS).length, 'fields');
+  }
   app.listen(PORT, () => console.log(`Noon Fleet HRMS running on http://localhost:${PORT}  (db: ${engine}, email: ${mailer.configured ? 'SMTP' : 'DEV MODE'}, drive: ${gdrive.configured() ? 'ON' : 'off'})`));
-}).catch(e => {
-  console.error('STARTUP FAILED:', e);
-  process.exit(1);
 });
 
 module.exports = app;
