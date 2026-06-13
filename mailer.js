@@ -1,76 +1,76 @@
-// Email sender for OTP codes.
-// Uses Resend API (RESEND_API_KEY) when configured, otherwise falls back to SMTP or dev mode.
+// Email sender for OTP codes — pure SMTP via nodemailer
 'use strict';
 require('dotenv').config();
+const nodemailer = require('nodemailer');
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SMTP_HOST = process.env.SMTP_HOST;
-const configured = !!(RESEND_API_KEY || SMTP_HOST);
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_FROM = process.env.SMTP_FROM || `Noon Fleet HRMS <${SMTP_USER}>`;
+// secure=true for port 465 (SSL), false for 587 (STARTTLS)
+const SMTP_SECURE = SMTP_PORT === 465 ? true : (process.env.SMTP_SECURE === 'true');
 
-async function sendViaResend(to, subject, text, html) {
-  const from = process.env.SMTP_FROM || 'Noon Fleet HRMS <onboarding@resend.dev>';
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + RESEND_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from, to, subject, text, html }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error('Resend API error ' + res.status + ': ' + err);
-  }
+const configured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+function createTransporter() {
+    return nodemailer.createTransport({
+          host: SMTP_HOST,
+          port: SMTP_PORT,
+          secure: SMTP_SECURE,
+          auth: {
+                  user: SMTP_USER,
+                  pass: SMTP_PASS,
+          },
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 20000,
+          tls: {
+                  rejectUnauthorized: false,
+          },
+    });
 }
 
-let transporter = null;
-if (!RESEND_API_KEY && SMTP_HOST) {
-  const nodemailer = require('nodemailer');
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: +(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      : undefined,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
-}
-
-async function sendOtp(to, code) {
-  if (!configured) {
-    console.log('[DEV MODE] OTP for ' + to + ': ' + code + ' (set RESEND_API_KEY to send real emails)');
-    return { dev: true };
-  }
-  const subject = code + ' is your Noon Fleet HRMS login code';
-  const text = 'Your one-time login code is: ' + code + '\n\nIt expires in 10 minutes.\n\nNoon Fleet HR Team';
-  const html = '<div style="font-family:Arial,sans-serif;max-width:420px"><h2 style="color:#1D9E75">Noon Fleet HRMS</h2><p>Your one-time login code is:</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px;font-family:monospace">' + code + '</p><p style="color:#666;font-size:13px">Expires in 10 minutes.</p></div>';
-  try {
-    if (RESEND_API_KEY) {
-      await sendViaResend(to, subject, text, html);
-    } else {
-      const from = process.env.SMTP_FROM || '"Noon Fleet HRMS" <' + process.env.SMTP_USER + '>';
-      await transporter.sendMail({ from, to, subject, text, html });
+async function sendOtp(to, otp) {
+    if (!configured) {
+          console.log(`[DEV] OTP for ${to}: ${otp}`);
+          return;
     }
-  } catch (e) {
-    console.error('sendOtp failed:', e.message);
-    throw new Error('Failed to send login code email. Please try again later.');
-  }
-  return { dev: false };
+    const transporter = createTransporter();
+    const mailOptions = {
+          from: SMTP_FROM,
+          to,
+          subject: 'Your Login OTP - Noon Fleet HRMS',
+          text: `Your one-time login code is: ${otp}\n\nThis code expires in 10 minutes.`,
+          html: `
+                <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto">
+                        <h2 style="color:#1a1a2e">Noon Fleet HRMS Login</h2>
+                                <p>Your one-time login code is:</p>
+                                        <div style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#e94560;margin:16px 0">${otp}</div>
+                                                <p style="color:#666">This code expires in 10 minutes. Do not share it with anyone.</p>
+                                                      </div>`,
+    };
+    try {
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`OTP sent to ${to}: ${info.messageId}`);
+    } catch (err) {
+          console.error('SMTP sendOtp failed:', err.message);
+          throw err;
+    }
 }
 
-async function sendNotice(to, subject, text) {
-  if (!configured || !to) return;
-  try {
-    if (RESEND_API_KEY) {
-      await sendViaResend(to, subject, text, text);
-    } else {
-      const from = process.env.SMTP_FROM || '"Noon Fleet HRMS" <' + process.env.SMTP_USER + '>';
-      await transporter.sendMail({ from, to, subject, text });
+async function sendNotice(to, subject, html) {
+    if (!configured) {
+          console.log(`[DEV] Notice to ${to}: ${subject}`);
+          return;
     }
-  } catch (e) { console.warn('notice email failed:', e.message); }
+    const transporter = createTransporter();
+    try {
+          await transporter.sendMail({ from: SMTP_FROM, to, subject, html });
+            } catch (err) {
+          console.error('SMTP sendNotice failed:', err.message);
+          throw err;
+    }
 }
 
 module.exports = { sendOtp, sendNotice, configured };
