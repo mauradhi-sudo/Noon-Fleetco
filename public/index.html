@@ -436,7 +436,7 @@ async function loadData(force) {
 /* ─── Auth ─────────────────────────────────────────────────── */
 /* ─── OTP Admin Login ──────────────────────────────────────── */
 async function requestOtp() {
-  const email = (document.getElementById('admin-email')?.value || '').trim();
+  const email = (document.getElementById('admin-email')?.value || S.otpEmail || '').trim();
   if (!email) { S.loginErr = 'Please enter your email address'; R(); return; }
   S.otpEmail   = email;
   S.otpSending = true;
