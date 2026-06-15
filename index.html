@@ -720,21 +720,21 @@ function renderDashboard() {
   const posRows = Object.entries(byPos).sort((a, b) => b[1] - a[1]);
   const maxPos  = posRows.length ? posRows[0][1] : 1;
   const pcL = onLeave / (es.length || 1) * 100, pcI = inact.length / (es.length || 1) * 100;
-  const card = (icon, color, bg, lbl, val) => `
-    <div class="stat" style="display:flex;align-items:center;gap:12px">
+  const card = (icon, color, bg, lbl, val, key) => `
+    <div class="stat" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="viewDashMetric('${key}')">
       <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
       <div><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div></div>
     </div>`;
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
-    ${card('ti-users','#185FA5','#E6F1FB','Total employees',es.length.toLocaleString())}
-    ${card('ti-user-check','var(--green)','var(--green-light)','Active &amp; working',working.toLocaleString())}
-    ${card('ti-beach','var(--amber)','#FAEEDA','On leave today',onLeave.toLocaleString())}
-    ${card('ti-user-off','var(--red)','#FCEBEB','Inactive',inact.length.toLocaleString())}
+    ${card('ti-users','#185FA5','#E6F1FB','Total employees',es.length.toLocaleString(),'total_emp')}
+    ${card('ti-user-check','var(--green)','var(--green-light)','Active &amp; working',working.toLocaleString(),'active_emp')}
+    ${card('ti-beach','var(--amber)','#FAEEDA','On leave today',onLeave.toLocaleString(),'on_leave')}
+    ${card('ti-user-off','var(--red)','#FCEBEB','Inactive',inact.length.toLocaleString(),'inactive')}
   </div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
-    ${card('ti-calendar-event','var(--amber)','#FAEEDA','Pending leave requests',pend)}
-    ${card('ti-id-badge','var(--red)','#FCEBEB','Visas expiring ≤90 days',expir.toLocaleString())}
-    ${card('ti-cash','var(--green)','var(--green-light)','Monthly payroll',aed(payTot))}
+    ${card('ti-calendar-event','var(--amber)','#FAEEDA','Pending leave requests',pend,'pending_leaves')}
+    ${card('ti-id-badge','var(--red)','#FCEBEB','Visas expiring ≤90 days',expir.toLocaleString(),'visa_expiring')}
+    ${card('ti-cash','var(--green)','var(--green-light)','Monthly payroll',aed(payTot),'payroll')}
   </div>
   <div class="card"><div class="card-head"><h3>Workforce status</h3>
     <span style="font-size:11px;color:var(--muted)"><span style="color:var(--green)">●</span> Working &nbsp;<span style="color:var(--amber)">●</span> On leave &nbsp;<span style="color:var(--red)">●</span> Inactive</span></div>
@@ -806,6 +806,62 @@ function rmEntity(kind, i) {
   const arr = kind === 'emp' ? CFG.empFields : kind === 'earn' ? CFG.payEarn : CFG.payDed;
   auditLog('Removed ' + (kind === 'emp' ? 'employee custom field' : 'payroll entity') + ': ' + (arr[i].label || arr[i]));
   arr.splice(i, 1); saveDB(); R();
+}
+
+/* ─── Dashboard Metrics Viewer ───────────────────────── */
+async function viewDashMetric(key) {
+  try {
+    const m = await api('GET', '/api/dashboard/metrics');
+    S.dashMetric = { key, metrics: m };
+    openModal('dashmetric');
+  } catch (e) {
+    alert('Error loading metrics: ' + e.message);
+  }
+}
+function renderDashMetricModal() {
+  const m = S.dashMetric || {}; if (!m.key) return '';
+  const metrics = m.metrics || {};
+  const details = {
+    total_emp: { title: 'All employees', list: metrics.details?.activeAndWorking || [] },
+    active_emp: { title: 'Active & working', list: metrics.details?.activeAndWorking || [] },
+    on_leave: { title: 'On leave today', list: metrics.details?.onLeaveTodayList || [] },
+    inactive: { title: 'Inactive', list: metrics.details?.inactiveList || [] },
+    pending_leaves: { title: 'Pending leave requests', list: metrics.details?.pendingLeavesList || [] },
+    visa_expiring: { title: 'Visas expiring ≤90 days', list: metrics.details?.visasExpiringList || [] },
+    payroll: { title: 'Monthly payroll total', total: metrics.totalPayroll }
+  };
+  const d = details[m.key] || {};
+  const listHTML = d.list && d.list.length ? d.list.map((item, i) => {
+    if (m.key === 'on_leave') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${item.leaveType}</td><td>${fmtDate(item.fromDate)} → ${fmtDate(item.toDate)}</td></tr>`;
+    if (m.key === 'inactive' || m.key === 'active_emp') return `<tr><td>${item.empId}</td><td>${item.name}</td></tr>`;
+    if (m.key === 'visa_expiring') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${fmtDate(item.expiryDate)}</td><td>${item.daysLeft} days</td></tr>`;
+    if (m.key === 'pending_leaves') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${item.type}</td><td>${fmtDate(item.fromDate)}</td><td>${item.days}d</td><td>${fmtDate(item.appliedOn)}</td></tr>`;
+    return '';
+  }).join('') : '<tr><td colspan="10" style="text-align:center;padding:1rem;color:var(--muted)">None</td></tr>';
+
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px">
+    <div class="modal-head"><h3>${d.title}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      ${d.total ? `<p style="font-size:16px"><b>Total:</b> <span style="color:var(--green);font-weight:600">${aed(d.total)}</span></p>` : ''}
+      ${d.list && d.list.length ? `<div class="tbl-wrap"><table><thead><tr>
+        ${m.key === 'on_leave' ? '<th>ID</th><th>Name</th><th>Leave type</th><th>Dates</th>' : ''}
+        ${m.key === 'inactive' || m.key === 'active_emp' ? '<th>ID</th><th>Name</th>' : ''}
+        ${m.key === 'visa_expiring' ? '<th>ID</th><th>Name</th><th>Expiry</th><th>Days left</th>' : ''}
+        ${m.key === 'pending_leaves' ? '<th>ID</th><th>Name</th><th>Type</th><th>From</th><th>Days</th><th>Applied</th>' : ''}
+      </tr></thead><tbody>${listHTML}</tbody></table></div>` : '<p style="text-align:center;color:var(--muted);padding:1rem">No data</p>'}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Close</button></div>
+  </div></div>`;
+}
+
+/* ─── Leaves Export ───────────────────────────────────── */
+function exportLeavesData() {
+  const link = document.createElement('a');
+  link.href = '/api/leaves/export';
+  link.download = 'leaves_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 /* ─── Data Export (offline workflow) ───────────────────────── */
@@ -1099,7 +1155,9 @@ function renderLeaves() {
     ).join('')}
   </div>
   <div class="card">
-    <div class="card-head"><h3>${filtered.length} request${filtered.length!==1?'s':''}</h3></div>
+    <div class="card-head"><h3>${filtered.length} request${filtered.length!==1?'s':''}</h3>
+      <button class="btn b" onclick="exportLeavesData()"><i class="ti ti-download"></i> Export</button>
+    </div>
     <div class="tbl-wrap"><table style="table-layout:fixed"><thead><tr>
       <th style="width:15%">Employee</th><th style="width:13%">Type</th><th style="width:9%">From</th>
       <th style="width:9%">To</th><th style="width:5%">Days</th><th style="width:16%">Reason</th>
@@ -1735,6 +1793,7 @@ function renderModal() {
   if (m === 'addAdmin')                         return renderAddAdminModal();
   if (m === 'deleteEmp')                        return renderDeleteEmpModal();
   if (m === 'viewCert')                         return renderCertModal();
+  if (m === 'dashmetric')                       return renderDashMetricModal();
   return '';
 }
 
