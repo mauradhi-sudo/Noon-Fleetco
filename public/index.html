@@ -714,7 +714,7 @@ function renderDashboard() {
   const pend    = (S.leaves || []).filter(l => l.status === 'Pending').length;
   const cutoff  = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
   const expir   = active.filter(e => e.evisaExpiry && e.evisaExpiry <= cutoff).length;
-  const payTot  = active.reduce((s, e) => s + n2(e.basicSalary) + n2(e.housingSalary) + n2(e.transportSalary) + n2(e.foodSalary), 0);
+  const payTot  = m?.payslipsIssued || 0;
   const byPos = {};
   active.forEach(e => { const k = e.position || 'Other'; byPos[k] = (byPos[k] || 0) + 1; });
   const posRows = Object.entries(byPos).sort((a, b) => b[1] - a[1]);
@@ -811,7 +811,7 @@ function rmEntity(kind, i) {
 /* ─── Dashboard Metrics Viewer ───────────────────────── */
 async function viewDashMetric(key) {
   try {
-    const m = await api('GET', '/api/dashboard/metrics');
+    const m = await api('GET', '/dashboard/metrics');
     S.dashMetric = { key, metrics: m };
     openModal('dashmetric');
   } catch (e) {
@@ -821,11 +821,12 @@ async function viewDashMetric(key) {
 function renderDashMetricModal() {
   const m = S.dashMetric || {}; if (!m.key) return '';
   const metrics = m.metrics || {};
+  const allEmps = [...(metrics.details?.activeAndWorking || []), ...(metrics.details?.onLeave || []), ...(metrics.details?.inactive || [])];
   const details = {
-    total_emp: { title: 'All employees', list: metrics.details?.activeAndWorking || [] },
+    total_emp: { title: 'All employees', list: allEmps },
     active_emp: { title: 'Active & working', list: metrics.details?.activeAndWorking || [] },
-    on_leave: { title: 'On leave today', list: metrics.details?.onLeaveTodayList || [] },
-    inactive: { title: 'Inactive', list: metrics.details?.inactiveList || [] },
+    on_leave: { title: 'On leave today', list: metrics.details?.onLeave || [] },
+    inactive: { title: 'Inactive', list: metrics.details?.inactive || [] },
     pending_leaves: { title: 'Pending leave requests', list: metrics.details?.pendingLeavesList || [] },
     visa_expiring: { title: 'Visas expiring ≤90 days', list: metrics.details?.visasExpiringList || [] },
     payroll: { title: 'Monthly payroll total', total: metrics.totalPayroll }
