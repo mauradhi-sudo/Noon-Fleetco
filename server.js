@@ -554,7 +554,8 @@ app.get('/api/leaves/export', auth, needPerm('view_leaves'), async (req, res) =>
   leaves.forEach(l => {
     const d = JSON.parse(l.data || '{}');
     const e = empMap[l.employeeid || l.employeeId] || {};
-    csv += `${e.empid || ''},${e.name || ''},"${d.type || ''}",${d.fromDate || ''},${d.toDate || ''},${d.days || '0'},${l.status || ''},${d.appliedOn || ''}\n`;
+    const row = [e.empid || '', e.name || '', d.type || '', d.fromDate || '', d.toDate || '', d.days || '0', l.status || '', d.appliedOn || ''].join(',');
+    csv = csv + row + '\n';
   });
   res.set('Content-Type', 'text/csv; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename=leaves_export.csv');
