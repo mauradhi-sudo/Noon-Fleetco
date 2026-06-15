@@ -62,7 +62,7 @@ function auth(req, res, next) {
 
 function can(req, perm) {
   const u = req.user;
-  return u.role === 'admin' && (u.isSuperAdmin || (u.permissions || []).includes(perm));
+  return u.role === 'admin' && (u.isSuperAdmin === true || u.isSuperAdmin === 1 || (u.permissions || []).includes(perm));
 }
 function needPerm(perm) {
   return (req, res, next) => can(req, perm) ? next() : res.status(403).json({ error: 'No permission' });
