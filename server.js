@@ -530,6 +530,36 @@ app.post('/api/backup', auth, superOnly, async (req, res) => { await makeBackup(
 
 /* ───────────────────────── start ───────────────────────── */
 app.get('/api/health', (req, res) => res.json({ ok: true, engine, drive: gdrive.configured(), email: mailer.configured }));
+
+app.get('/api/dashboard/metrics', auth, needPerm('view_employees'), async (req, res) => {
+  const emps = (await query('SELECT * FROM employees', [])).rows || [];
+  const leaves = (await query('SELECT * FROM leaves', [])).rows || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const active = emps.filter(e => e.status === 'Active');
+  const onLeaveToday = leaves.filter(l => {
+    const d = JSON.parse(l.data || '{}');
+    return l.status === 'Approved' && d.fromDate <= today && d.toDate >= today;
+  });
+  const pendingLeaves = leaves.filter(l => l.status === 'Pending');
+  const inactive = emps.filter(e => e.status === 'Inactive');
+  res.json({ ok: true, total: emps.length, active: active.length, onLeave: onLeaveToday.length, inactive: inactive.length, pending: pendingLeaves.length });
+});
+
+app.get('/api/leaves/export', auth, needPerm('view_leaves'), async (req, res) => {
+  const leaves = (await query('SELECT * FROM leaves', [])).rows || [];
+  const emps = (await query('SELECT * FROM employees', [])).rows || [];
+  const empMap = {};
+  emps.forEach(e => empMap[e.id] = e);
+  let csv = 'Employee ID,Employee Name,Leave Type,From Date,To Date,Days,Status,Applied Date\n';
+  leaves.forEach(l => {
+    const d = JSON.parse(l.data || '{}');
+    const e = empMap[l.employeeid || l.employeeId] || {};
+    csv += `${e.empid || ''},${e.name || ''},"${d.type || ''}",${d.fromDate || ''},${d.toDate || ''},${d.days || '0'},${l.status || ''},${d.appliedOn || ''}\n`;
+  });
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename=leaves_export.csv');
+  res.send(csv);
+});
 /* ───────────────────────── dashboard metrics ───────────────────────── */
 app.get('/api/dashboard/metrics', auth, needPerm('view_employees'), async (req, res) => {
   const { rows: emps } = await query('SELECT * FROM employees', []);
