@@ -811,7 +811,7 @@ function rmEntity(kind, i) {
 /* ─── Dashboard Metrics Viewer ───────────────────────── */
 async function viewDashMetric(key) {
   try {
-    const m = await api('GET', '/api/dashboard/metrics');
+    const m = await api('GET', '/dashboard/metrics');
     S.dashMetric = { key, metrics: m };
     openModal('dashmetric');
   } catch (e) {
