@@ -530,7 +530,67 @@ app.post('/api/backup', auth, superOnly, async (req, res) => { await makeBackup(
 
 /* ───────────────────────── start ───────────────────────── */
 app.get('/api/health', (req, res) => res.json({ ok: true, engine, drive: gdrive.configured(), email: mailer.configured }));
+/* ───────────────────────── dashboard metrics ───────────────────────── */
+app.get('/api/dashboard/metrics', auth, needPerm('view_employees'), async (req, res) => {
+  const { rows: emps } = await query('SELECT * FROM employees', []);
+  const { rows: leaves } = await query('SELECT * FROM leaves', []);
+  const today = new Date().toISOString().slice(0, 10);
+  const active = emps.filter(e => e.status === 'Active');
+  const onLeaveToday = leaves.filter(l => {
+    const d = JSON.parse(l.data || '{}');
+    return l.status === 'Approved' && d.fromDate <= today && d.toDate >= today;
+  });
+  const pendingLeaves = leaves.filter(l => l.status === 'Pending');
+  const inactive = emps.filter(e => e.status === 'Inactive');
+  const visasExpiring = emps.filter(e => {
+    const d = JSON.parse(e.data || '{}');
+    if (!d.evisaExpiry) return false;
+    const days = Math.floor((new Date(d.evisaExpiry) - Date.now()) / 86400000);
+    return days > 0 && days <= 90;
+  });
+  res.json({
+    totalEmployees: emps.length,
+    activeAndWorking: active.length,
+    onLeaveToday: onLeaveToday.length,
+    inactive: inactive.length,
+    pendingLeaves: pendingLeaves.length,
+    visasExpiring: visasExpiring.length,
+    totalPayroll: active.reduce((sum, e) => sum + (parseFloat(JSON.parse(e.data || '{}').basicSalary) || 0), 0),
+    details: {
+      onLeaveTodayList: onLeaveToday.map(l => {
+        const d = JSON.parse(l.data || '{}');
+        const emp = emps.find(e => e.id === l.employeeid ?? l.employeeId);
+        return { empId: emp?.empid ?? emp?.empId, name: emp?.name, leaveType: d.type, fromDate: d.fromDate, toDate: d.toDate };
+      }),
+      inactiveList: inactive.map(e => ({ empId: e.empid ?? e.empId, name: e.name, status: e.status })),
+      visasExpiringList: visasExpiring.map(e => {
+        const d = JSON.parse(e.data || '{}');
+        const days = Math.floor((new Date(d.evisaExpiry) - Date.now()) / 86400000);
+        return { empId: e.empid ?? e.empId, name: e.name, expiryDate: d.evisaExpiry, daysLeft: days };
+      }),
+      pendingLeavesList: pendingLeaves.map(l => {
+        const d = JSON.parse(l.data || '{}');
+        const emp = emps.find(e => e.id === l.employeeid ?? l.employeeId);
+        return { empId: emp?.empid ?? emp?.empId, name: emp?.name, type: d.type, fromDate: d.fromDate, toDate: d.toDate, days: d.days, appliedOn: d.appliedOn };
+      })
+    }
+  });
+});
 
+app.get('/api/leaves/export', auth, needPerm('view_leaves'), async (req, res) => {
+  const { rows: leaves } = await query('SELECT * FROM leaves', []);
+  const { rows: emps } = await query('SELECT * FROM employees', []);
+  const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
+  const csv = 'Employee ID,Employee Name,Leave Type,From Date,To Date,Days,Status,Applied Date\n'
+    + leaves.map(l => {
+      const d = JSON.parse(l.data || '{}');
+      const emp = empMap[l.employeeid ?? l.employeeId];
+      return `${emp?.empid ?? emp?.empId || ''},${emp?.name || ''},"${d.type || ''}",${d.fromDate || ''},${d.toDate || ''},${d.days || '0'},${l.status || ''},${d.appliedOn || ''}`;
+    }).join('\n');
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename=leaves_export.csv');
+  res.send(csv);
+});
 init().then(async () => {
   const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase();
   const { rows } = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []);
