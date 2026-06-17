@@ -37,33 +37,22 @@ const today = () => now().slice(0, 10);
 const uid = (p) => p + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
 const J = (v, fb) => { try { return JSON.parse(v); } catch { return fb; } };
 
-// Date parsing utility for Excel dates
 function parseExcelDate(value) {
   if (!value || value === '') return null;
-
-  // If it's a number (Excel serial), convert to date
   if (typeof value === 'number') {
-    // Excel epoch is 1900-01-01 (with leap year bug)
     const date = new Date((value - 25569) * 86400 * 1000);
-    return date.toISOString().split('T')[0]; // YYYY-MM-DD
+    return date.toISOString().split('T')[0];
   }
-
-  // If it's already a string, check format
   if (typeof value === 'string') {
-    // Already in YYYY-MM-DD format
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-
-    // Try to parse and convert other date formats
     const parsed = new Date(value);
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString().split('T')[0];
     }
   }
-
   return null;
 }
 
-// List of date fields to auto-parse
 const DATE_FIELDS = [
   'dob', 'contractStartDate', 'contractEndDate', 'joiningDate', 'tentativeJoiningDate',
   'evisaExpiry', 'evisaDate', 'onbCallDate', 'handoverToONBDate', 'docsReceivedDate',
@@ -128,7 +117,6 @@ async function checkOtp(target, code) {
   return true;
 }
 
-// ===== EXCEL UPLOAD ENDPOINT =====
 app.post('/api/employees/import', auth, needPerm('view_employees'), upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -147,14 +135,11 @@ app.post('/api/employees/import', auth, needPerm('view_employees'), upload.singl
     for (let i = 0; i < data.length; i++) {
       try {
         const row = data[i];
-
-        // Validate required fields
         if (!row.empId || !row.name || !row.passportNo || !row.email) {
-          errors.push(\`Row \${i + 2}: Missing required fields (empId, name, passportNo, email)\`);
+          errors.push('Row ' + (i + 2) + ': Missing required fields (empId, name, passportNo, email)');
           continue;
         }
 
-        // Parse all date fields
         const emp = { ...row };
         for (const dateField of DATE_FIELDS) {
           if (emp[dateField]) {
@@ -162,7 +147,6 @@ app.post('/api/employees/import', auth, needPerm('view_employees'), upload.singl
           }
         }
 
-        // Parse number fields
         ['basicSalary', 'housingSalary', 'transportSalary', 'foodSalary'].forEach(f => {
           if (emp[f]) emp[f] = +emp[f] || null;
         });
@@ -175,14 +159,14 @@ app.post('/api/employees/import', auth, needPerm('view_employees'), upload.singl
 
         imported.push({ id, empId: emp.empId, name: emp.name });
       } catch (e) {
-        errors.push(\`Row \${i + 2}: \${e.message}\`);
+        errors.push('Row ' + (i + 2) + ': ' + e.message);
       }
     }
 
-    fs.unlinkSync(filePath); // Delete uploaded file
-    await audit(req.user.name, \`Imported \${imported.length} employees\`);
+    fs.unlinkSync(filePath);
+    await audit(req.user.name, 'Imported ' + imported.length + ' employees');
 
-    res.json({ message: \`Imported \${imported.length} employees\`, imported, errors: errors.length ? errors : undefined });
+    res.json({ message: 'Imported ' + imported.length + ' employees', imported, errors: errors.length ? errors : undefined });
   } catch (e) {
     if (req.file) fs.unlinkSync(req.file.path);
     res.status(500).json({ error: e.message });
