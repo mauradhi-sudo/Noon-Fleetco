@@ -622,12 +622,13 @@ function renderAdmin() {
     ...(can('import_employees') || can('upload_payroll') ? [['import', 'ti-file-upload', 'Bulk Import', '']] : []),
     ...(can('view_leaves') ? [['leaves', 'ti-calendar-event', 'Leaves', pendingLeaves > 0 ? pendingLeaves : '']] : []),
     ...(can('view_payroll') ? [['payroll', 'ti-cash', 'Payroll', '']] : []),
+     [['accommodation', 'ti-building-community', 'Accommodation', '']],
     ...(can('view_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
     ...(can('manage_settings') ? [['settings', 'ti-settings', 'Settings', '']] : []),
     ...(isSuperAdmin ? [['admins', 'ti-shield-half', 'Admin Users', ''], ['audit', 'ti-history', 'Audit Log', '']] : [])
   ];
   const titles = {
-    dashboard: 'Dashboard', employees: 'Employees', import: 'Bulk Import', leaves: 'Leave Requests',
+    dashboard: 'Dashboard', employees: 'Employees', import: 'Bulk Import', leaves: 'Leave Requests',  accommodation: 'Accommodation',
     payroll: 'Payroll', documents: 'Documents', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
     empview: S.viewEmp?.name || 'Employee', psview: 'Payslip'
   };
@@ -638,6 +639,7 @@ function renderAdmin() {
   else if (S.nav === 'settings')  content = renderSettingsPage();
   else if (S.nav === 'employees') content = renderEmpList();
   else if (S.nav === 'import')    content = renderImport();
+  else if (S.nav === 'accommodation') content = renderAccommodation();
   else if (S.nav === 'leaves')    content = renderLeaves();
   else if (S.nav === 'payroll')   content = renderPayrollPage();
   else if (S.nav === 'documents') content = renderDocsPage();
@@ -1293,6 +1295,47 @@ function renderDocsPage() {
         </div>`).join('')}
     </div>
   </div>`;
+}
+
+function renderAccommodation() {
+  return `
+    <div class="card">
+      <div class="card-head">
+        <h3>Accommodation Management</h3>
+      </div>
+
+      <div class="card-body">
+
+        <div class="stats-row">
+          <div class="stat">
+            <div class="lbl">Rooms</div>
+            <div class="val">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="lbl">Total Beds</div>
+            <div class="val">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="lbl">Occupied Beds</div>
+            <div class="val">0</div>
+          </div>
+
+          <div class="stat">
+            <div class="lbl">Available Beds</div>
+            <div class="val">0</div>
+          </div>
+        </div>
+
+        <button class="btn g">
+          <i class="ti ti-plus"></i>
+          Add Room
+        </button>
+
+      </div>
+    </div>
+  `;
 }
  
 /* ─── Employee Detail (admin) ──────────────────────────────── */
