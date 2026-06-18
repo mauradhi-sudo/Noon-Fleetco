@@ -34,7 +34,22 @@ const query = async (sql, params) => {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
+// Serve static files from root
+app.use(express.static(__dirname));
+
+// Serve portals
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin-portal.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin-portal.html'));
+});
+
+app.get('/employee', (req, res) => {
+  res.sendFile(path.join(__dirname, 'employee-portal.html'));
+});
 
 const uploadDir = path.join(__dirname, 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
