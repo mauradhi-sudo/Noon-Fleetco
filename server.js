@@ -419,7 +419,7 @@ app.get('/api/dashboard/metrics', auth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-} catch (e) { res.status(500).json({ error: e.message }); } }); app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
 
 init().then(async () => { const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase(); const r = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []); if (!r.rows.length) { await query('INSERT INTO admins (id, email, name, isSuperAdmin, permissions, createdAt) VALUES (?, ?, ?, 1, ?, ?)', ['admin-001', email, 'Super Admin', '[]', today()]); console.log(`✓ Super admin created: ${email}`); } app.listen(PORT, () => console.log(`✓ HRMS server running on port ${PORT}`)); }).catch(e => { console.error('✗ Startup failed:', e.message); process.exit(1); });
 
