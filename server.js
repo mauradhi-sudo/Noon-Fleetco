@@ -353,16 +353,73 @@ app.get('/api/audit', auth, async (req, res) => { try { if (!isSuperAdmin(req)) 
 app.get('/api/config', auth, async (req, res) => { try { const r = await query('SELECT v FROM config WHERE k = ?', ['cfg']); res.json(r.rows.length ? J(r.rows[0].v, {}) : {}); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/dashboard/metrics', auth, async (req, res) => {
+  try {
+    const emps = await query('SELECT * FROM employees ORDER BY empId', []);
+    const leaves = await query('SELECT * FROM leaves WHERE status = ?', ['Pending']);
+    const payslips = await query('SELECT * FROM payslips', []);
+    const rooms = await query('SELECT * FROM accommodations', []);
 
-app.get('/api/dashboard/metrics', auth, async (req, res) => { try { const emps = await query('SELECT * FROM employees ORDER BY empId', []); const leaves = await query('SELECT * FROM leaves WHERE status = ?', ['Pending']); const payslips = await query('SELECT * FROM payslips', []); const rooms = await query('SELECT * FROM accommodations',[]);let totalBeds = 0;let occupiedBeds = 0;rooms.rows.forEach(r=>{totalBeds += +(r.capacity || 0);occupiedBeds += +(r.occupied || 0);});accommodation:{
-   rooms: rooms.rows.length,
-   totalBeds,
-   occupiedBeds,
-   availableBeds:
-      totalBeds - occupiedBeds
-} const empList = emps.rows.map(rowToEmp); const activeAndWorking = empList.filter(e => e.status === 'Active'); const onLeave = empList.filter(e => e.status === 'On Leave'); const inactive = empList.filter(e => e.status === 'Inactive'); let totalNetPay = 0; payslips.rows.forEach(p => { const data = J(p.data, {}); totalNetPay += +(data.netPay || data.net_pay || 0); }); res.json({ totalEmployees: empList.length, pendingLeaves: leaves.rows.length, payslipsIssued: totalNetPay, details: { activeAndWorking: activeAndWorking.map(e => ({ id: e.id, empId: e.empId, name: e.name })), onLeave: onLeave.map(e => ({ id: e.id, empId: e.empId, name: e.name })), inactive: inactive.map(e => ({ id: e.id, empId: e.empId, name: e.name })) } }); } catch (e) { res.status(500).json({ error: e.message }); } });
+    let totalBeds = 0;
+    let occupiedBeds = 0;
 
-app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
+    rooms.rows.forEach(r => {
+      totalBeds += +(r.capacity || 0);
+      occupiedBeds += +(r.occupied || 0);
+    });
+
+    const empList = emps.rows.map(rowToEmp);
+
+    const activeAndWorking = empList.filter(e => e.status === 'Active');
+    const onLeave = empList.filter(e => e.status === 'On Leave');
+    const inactive = empList.filter(e => e.status === 'Inactive');
+
+    let totalNetPay = 0;
+
+    payslips.rows.forEach(p => {
+      const data = J(p.data, {});
+      totalNetPay += +(data.netPay || data.net_pay || 0);
+    });
+
+    res.json({
+      totalEmployees: empList.length,
+
+      accommodation: {
+        rooms: rooms.rows.length,
+        totalBeds,
+        occupiedBeds,
+        availableBeds: totalBeds - occupiedBeds
+      },
+
+      pendingLeaves: leaves.rows.length,
+      payslipsIssued: totalNetPay,
+
+      details: {
+        activeAndWorking: activeAndWorking.map(e => ({
+          id: e.id,
+          empId: e.empId,
+          name: e.name
+        })),
+
+        onLeave: onLeave.map(e => ({
+          id: e.id,
+          empId: e.empId,
+          name: e.name
+        })),
+
+        inactive: inactive.map(e => ({
+          id: e.id,
+          empId: e.empId,
+          name: e.name
+        }))
+      }
+    });
+
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+} catch (e) { res.status(500).json({ error: e.message }); } }); app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
 
 init().then(async () => { const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase(); const r = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []); if (!r.rows.length) { await query('INSERT INTO admins (id, email, name, isSuperAdmin, permissions, createdAt) VALUES (?, ?, ?, 1, ?, ?)', ['admin-001', email, 'Super Admin', '[]', today()]); console.log(`✓ Super admin created: ${email}`); } app.listen(PORT, () => console.log(`✓ HRMS server running on port ${PORT}`)); }).catch(e => { console.error('✗ Startup failed:', e.message); process.exit(1); });
 
