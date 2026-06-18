@@ -245,6 +245,39 @@ async function upsert(emp) {
     });
 
     console.log('✓ Seeded sample employee SN1366 (passport AA254035).');
+
+    // ── Sample accommodation: camps, rooms, and one bed allocation ──
+    const campIds = {};
+    for (const cname of ['Al Quoz', 'Sonapur', 'DIP', 'Jebel Ali']) {
+      const cid = uid('C');
+      campIds[cname] = cid;
+      await query('INSERT INTO camps (id, name, data) VALUES (?, ?, ?)',
+        [cid, cname, JSON.stringify({ createdAt: today() })]);
+    }
+
+    const roomDefs = [
+      { camp: 'Al Quoz', building: 'A', floor: '1', roomNo: '101', capacity: 4 },
+      { camp: 'Al Quoz', building: 'A', floor: '1', roomNo: '102', capacity: 6 },
+      { camp: 'Sonapur', building: 'B', floor: '2', roomNo: '201', capacity: 4 },
+    ];
+    const roomIds = {};
+    for (const rd of roomDefs) {
+      const rid = uid('R');
+      roomIds[rd.camp + '/' + rd.roomNo] = rid;
+      await query('INSERT INTO acc_rooms (id, campId, building, floor, roomNo, capacity, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [rid, campIds[rd.camp], rd.building, rd.floor, rd.roomNo, rd.capacity,
+         JSON.stringify({ building: rd.building, floor: rd.floor, createdAt: today() })]);
+    }
+
+    // Allocate SN1366 → Al Quoz / Room 101 / Bed 1, check-in 12-Jun-2026
+    const sn = await query('SELECT id FROM employees WHERE empId = ?', ['SN1366']);
+    if (sn.rows.length) {
+      await query('INSERT INTO bed_allocations (id, employeeId, campId, roomId, bed, checkIn, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [uid('B'), sn.rows[0].id, campIds['Al Quoz'], roomIds['Al Quoz/101'], '1', '2026-06-12',
+         JSON.stringify({ checkIn: '2026-06-12' })]);
+    }
+
+    console.log('✓ Seeded 4 camps, 3 rooms, and 1 bed allocation (SN1366 → Al Quoz 101, Bed 1).');
   } else {
     console.log(`✓ Database already has ${c} employees — nothing to seed.`);
   }

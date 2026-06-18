@@ -61,6 +61,9 @@ const rowToLeave = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r
 const rowToPs = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, month: r.month });
 const rowToNotif = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, isRead: +(r.isread ?? r.isRead) });
 const rowToAdmin = (r) => ({ id: r.id, email: r.email, name: r.name, isSuperAdmin: +(r.issuperadmin ?? r.isSuperAdmin), permissions: J(r.permissions, []), createdAt: r.createdat ?? r.createdAt });
+const rowToCamp  = (r) => Object.assign(J(r.data, {}), { id: r.id, name: r.name });
+const rowToRoom  = (r) => Object.assign(J(r.data, {}), { id: r.id, campId: r.campid ?? r.campId, building: r.building || '', floor: r.floor || '', roomNo: r.roomno ?? r.roomNo, capacity: +(r.capacity || 0) });
+const rowToAlloc = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, campId: r.campid ?? r.campId, roomId: r.roomid ?? r.roomId, bed: String(r.bed ?? ''), checkIn: r.checkin ?? r.checkIn });
 
 async function audit(user, action) { try { await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]); } catch (e) { } }
 async function notify(employeeId, type, title, message) { try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) { } }
@@ -108,7 +111,7 @@ app.put('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmi
 
 app.patch('/api/employees/:id/status', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); e.status = req.body.status; await query('UPDATE employees SET status = ?, data = ? WHERE id = ?', [req.body.status, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); await query('DELETE FROM employees WHERE id = ?', [req.params.id]); await query('DELETE FROM leaves WHERE employeeId = ?', [e.id]); await query('DELETE FROM payslips WHERE employeeId = ?', [e.id]); await query('DELETE FROM documents WHERE employeeId = ?', [e.id]); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); await query('DELETE FROM employees WHERE id = ?', [req.params.id]); await query('DELETE FROM leaves WHERE employeeId = ?', [e.id]); await query('DELETE FROM payslips WHERE employeeId = ?', [e.id]); await query('DELETE FROM documents WHERE employeeId = ?', [e.id]); await query('DELETE FROM bed_allocations WHERE employeeId = ?', [e.id]); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; let added = 0, updated = 0; for (const row of rows) { const existing = await query('SELECT id FROM employees WHERE empId = ?', [row.empId]); if (existing.rows.length) { const e = rowToEmp(await query('SELECT * FROM employees WHERE empId = ?', [row.empId])); Object.assign(e, row); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE empId = ?', [e.name, e.email, e.status || 'Active', e.passportNo, JSON.stringify(e), row.empId]); updated++; } else { const id = uid('E'); await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, row.empId, row.passportNo, row.name, row.email, row.status || 'Active', JSON.stringify(row)]); added++; } } await audit(req.user.name, `Bulk import: +${added}, ~${updated}`); res.json({ message: 'Imported', added, updated, total: added + updated }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -155,6 +158,182 @@ app.get('/api/config', auth, async (req, res) => { try { const r = await query('
 app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/dashboard/metrics', auth, async (req, res) => { try { const emps = await query('SELECT * FROM employees ORDER BY empId', []); const leaves = await query('SELECT * FROM leaves WHERE status = ?', ['Pending']); const payslips = await query('SELECT * FROM payslips', []); const empList = emps.rows.map(rowToEmp); const activeAndWorking = empList.filter(e => e.status === 'Active'); const onLeave = empList.filter(e => e.status === 'On Leave'); const inactive = empList.filter(e => e.status === 'Inactive'); let totalNetPay = 0; payslips.rows.forEach(p => { const data = J(p.data, {}); totalNetPay += +(data.netPay || data.net_pay || 0); }); res.json({ totalEmployees: empList.length, pendingLeaves: leaves.rows.length, payslipsIssued: totalNetPay, details: { activeAndWorking: activeAndWorking.map(e => ({ id: e.id, empId: e.empId, name: e.name })), onLeave: onLeave.map(e => ({ id: e.id, empId: e.empId, name: e.name })), inactive: inactive.map(e => ({ id: e.id, empId: e.empId, name: e.name })) } }); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+/* ─── Accommodation ─────────────────────────────────────────────────────────
+   Camp → Building → Floor → Room → Bed.  Bed allocations link an employee to a
+   specific camp/room/bed with a check-in date.  Reads are permission-gated the
+   same way as the rest of the system: an employee can only ever see their own
+   allocation, regardless of what the browser requests. */
+function canManageAcc(req) { return isSuperAdmin(req) || hasPermission(req, 'manage_accommodation'); }
+function enrichAlloc(a, camps, rooms, emps) {
+  const camp = camps.find(c => c.id === a.campId) || {};
+  const room = rooms.find(r => r.id === a.roomId) || {};
+  const emp  = emps.find(e => e.id === a.employeeId) || {};
+  return Object.assign({}, a, { campName: camp.name || '', roomNo: room.roomNo || '', empName: emp.name || '', empCode: emp.empId || '' });
+}
+
+// Camps (with room count + capacity/occupancy summary)
+app.get('/api/accommodation/camps', auth, async (req, res) => {
+  try {
+    const camps  = (await query('SELECT * FROM camps ORDER BY name', [])).rows.map(rowToCamp);
+    const rooms  = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
+    const allocs = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc);
+    res.json(camps.map(c => {
+      const cr  = rooms.filter(r => r.campId === c.id);
+      const cap = cr.reduce((s, r) => s + (+r.capacity || 0), 0);
+      const occ = allocs.filter(a => a.campId === c.id).length;
+      return Object.assign({}, c, { rooms: cr.length, capacity: cap, occupied: occ, vacant: Math.max(0, cap - occ) });
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/camps', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Camp name is required' });
+    const dup = await query('SELECT id FROM camps WHERE LOWER(name) = ?', [name.toLowerCase()]);
+    if (dup.rows.length) return res.status(409).json({ error: 'A camp with that name already exists' });
+    const id = uid('C');
+    await query('INSERT INTO camps (id, name, data) VALUES (?, ?, ?)', [id, name, JSON.stringify({ createdAt: today() })]);
+    await audit(req.user.name, `Camp added: ${name}`);
+    res.json({ id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/accommodation/camps/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const rooms = await query('SELECT id FROM acc_rooms WHERE campId = ?', [req.params.id]);
+    if (rooms.rows.length) return res.status(409).json({ error: 'Delete this camp\'s rooms first' });
+    await query('DELETE FROM camps WHERE id = ?', [req.params.id]);
+    await audit(req.user.name, 'Camp deleted');
+    res.json({ message: 'Deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Rooms (with per-bed occupancy)
+app.get('/api/accommodation/rooms', auth, async (req, res) => {
+  try {
+    const camps  = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
+    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const allocs = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc);
+    let rooms    = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
+    if (req.query.campId) rooms = rooms.filter(r => r.campId === req.query.campId);
+    const campName = id => (camps.find(c => c.id === id) || {}).name || '';
+    const empName  = id => (emps.find(e => e.id === id) || {}).name || '';
+    rooms.sort((a, b) => String(campName(a.campId)).localeCompare(String(campName(b.campId))) || String(a.roomNo).localeCompare(String(b.roomNo), undefined, { numeric: true }));
+    res.json(rooms.map(r => {
+      const beds = allocs.filter(a => a.roomId === r.id).map(a => ({ bed: a.bed, employeeId: a.employeeId, empName: empName(a.employeeId) }));
+      return Object.assign({}, r, { campName: campName(r.campId), occupied: beds.length, vacant: Math.max(0, (+r.capacity || 0) - beds.length), beds });
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/rooms', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const campId = req.body.campId;
+    const roomNo = String(req.body.roomNo || '').trim();
+    if (!campId || !roomNo) return res.status(400).json({ error: 'Camp and room number are required' });
+    const camp = await query('SELECT id FROM camps WHERE id = ?', [campId]);
+    if (!camp.rows.length) return res.status(404).json({ error: 'Camp not found' });
+    const cap = Math.max(1, parseInt(req.body.capacity, 10) || 1);
+    const building = String(req.body.building || '').trim();
+    const floor = String(req.body.floor || '').trim();
+    const id = uid('R');
+    await query('INSERT INTO acc_rooms (id, campId, building, floor, roomNo, capacity, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, campId, building, floor, roomNo, cap, JSON.stringify({ building, floor, createdAt: today() })]);
+    await audit(req.user.name, `Room added: ${roomNo} (capacity ${cap})`);
+    res.json({ id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/accommodation/rooms/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM acc_rooms WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const room = rowToRoom(r.rows[0]);
+    const cap = req.body.capacity != null ? Math.max(1, parseInt(req.body.capacity, 10) || 1) : room.capacity;
+    const occRow = (await query('SELECT COUNT(*) AS c FROM bed_allocations WHERE roomId = ?', [req.params.id])).rows[0];
+    const occN = +(occRow.c ?? occRow.count ?? 0);
+    if (cap < occN) return res.status(409).json({ error: `Capacity can't be below current occupancy (${occN})` });
+    const building = req.body.building != null ? String(req.body.building).trim() : room.building;
+    const floor    = req.body.floor != null ? String(req.body.floor).trim() : room.floor;
+    const roomNo   = req.body.roomNo != null ? String(req.body.roomNo).trim() : room.roomNo;
+    const data = Object.assign(J(r.rows[0].data, {}), { building, floor });
+    await query('UPDATE acc_rooms SET campId = ?, building = ?, floor = ?, roomNo = ?, capacity = ?, data = ? WHERE id = ?',
+      [room.campId, building, floor, roomNo, cap, JSON.stringify(data), req.params.id]);
+    await audit(req.user.name, `Room updated: ${roomNo}`);
+    res.json({ message: 'Updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/accommodation/rooms/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const occRow = (await query('SELECT COUNT(*) AS c FROM bed_allocations WHERE roomId = ?', [req.params.id])).rows[0];
+    if (+(occRow.c ?? occRow.count ?? 0)) return res.status(409).json({ error: 'Vacate all beds in this room first' });
+    await query('DELETE FROM acc_rooms WHERE id = ?', [req.params.id]);
+    await audit(req.user.name, 'Room deleted');
+    res.json({ message: 'Deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Bed allocations
+app.get('/api/accommodation/allocations', auth, async (req, res) => {
+  try {
+    const camps  = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
+    const rooms  = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
+    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    let allocs   = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc);
+    if (req.user.role === 'employee') allocs = allocs.filter(a => a.employeeId === req.user.employeeId);
+    res.json(allocs.map(a => enrichAlloc(a, camps, rooms, emps)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/allocations', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const { employeeId, campId, roomId } = req.body;
+    const bed = String(req.body.bed || '').trim();
+    const checkIn = req.body.checkIn || today();
+    if (!employeeId || !campId || !roomId || !bed) return res.status(400).json({ error: 'Employee, camp, room and bed are all required' });
+    const roomRow = await query('SELECT * FROM acc_rooms WHERE id = ?', [roomId]);
+    if (!roomRow.rows.length) return res.status(404).json({ error: 'Room not found' });
+    const room = rowToRoom(roomRow.rows[0]);
+    if (room.campId !== campId) return res.status(400).json({ error: 'That room is not in the selected camp' });
+    const bedN = parseInt(bed, 10);
+    if (!(bedN >= 1 && bedN <= room.capacity)) return res.status(400).json({ error: `Bed must be between 1 and ${room.capacity}` });
+    const clash = await query('SELECT employeeId FROM bed_allocations WHERE roomId = ? AND bed = ?', [roomId, bed]);
+    if (clash.rows.length) {
+      const holder = clash.rows[0].employeeid ?? clash.rows[0].employeeId;
+      if (holder !== employeeId) return res.status(409).json({ error: 'That bed is already occupied' });
+    }
+    const data = { checkIn };
+    const existing = await query('SELECT id FROM bed_allocations WHERE employeeId = ?', [employeeId]);
+    if (existing.rows.length) {
+      await query('UPDATE bed_allocations SET campId = ?, roomId = ?, bed = ?, checkIn = ?, data = ? WHERE employeeId = ?',
+        [campId, roomId, bed, checkIn, JSON.stringify(data), employeeId]);
+    } else {
+      await query('INSERT INTO bed_allocations (id, employeeId, campId, roomId, bed, checkIn, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [uid('B'), employeeId, campId, roomId, bed, checkIn, JSON.stringify(data)]);
+    }
+    await notify(employeeId, 'approved', 'Accommodation assigned', `Room ${room.roomNo}, Bed ${bed}`);
+    await audit(req.user.name, `Bed allocated: emp ${employeeId} → room ${room.roomNo}, bed ${bed}`);
+    res.json({ message: 'Allocated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/accommodation/allocations/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
+    await audit(req.user.name, 'Bed vacated');
+    res.json({ message: 'Vacated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
 
