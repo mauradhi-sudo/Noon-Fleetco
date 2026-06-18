@@ -73,6 +73,24 @@ CREATE TABLE IF NOT EXISTS documents (
   uploadedAt TEXT,
   uploader TEXT
 );
+CREATE TABLE IF NOT EXISTS accommodations (
+  id TEXT PRIMARY KEY,
+  campName TEXT,
+  roomNo TEXT,
+  capacity INTEGER,
+  occupied INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'Active'
+);
+
+CREATE TABLE IF NOT EXISTS accommodation_assignments (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  accommodationId TEXT,
+  bedNo TEXT,
+  checkInDate TEXT,
+  checkOutDate TEXT,
+  status TEXT DEFAULT 'Active'
+);
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   employeeId TEXT,
