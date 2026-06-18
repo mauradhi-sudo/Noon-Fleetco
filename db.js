@@ -1,33 +1,119 @@
-# ── Noon Fleet HRMS — environment configuration ──────────────────
-# Copy this file to ".env" and fill in what you have.
-# Everything is OPTIONAL for local testing: with no .env at all, the app runs
-# with a local SQLite database and "dev mode" OTPs printed in the server log.
+// Database adapter: PostgreSQL when DATABASE_URL is set, otherwise built-in SQLite (node:sqlite).
+// Same query(sql, params) API for both. SQL kept portable across the two engines.
+'use strict';
+require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 
-# Server
-PORT=3000
-SUPER_ADMIN_EMAIL=mauradhi@noon.com
-SUPER_ADMIN_NAME=Super Admin
-# JWT_SECRET=generate-a-long-random-string          # auto-generated if omitted
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
-# Database — leave empty to use built-in SQLite (fine for pilot).
-# For production use PostgreSQL (Railway/Render give you this URL):
-# DATABASE_URL=postgres://user:pass@host:5432/hrms
+let query; // async (sql, params) => { rows }
+let engine;
 
-# Email (OTP codes + notifications). Example: Gmail with an App Password.
-# Without these, OTPs are shown in the server log instead (dev mode).
-# SMTP_HOST=smtp.gmail.com
-# SMTP_PORT=587
-# SMTP_USER=hr@yourcompany.com
-# SMTP_PASS=your-gmail-app-password
-# SMTP_FROM="Noon Fleet HRMS" <hr@yourcompany.com>
-# HR_NOTIFY_EMAIL=hr@yourcompany.com                # gets a copy of new leave requests
+if (process.env.DATABASE_URL) {
+  engine = 'postgres';
+  const { Pool } = require('pg');
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false },
+  });
+  // translate ? placeholders to $1..$n
+  query = async (sql, params = []) => {
+    let i = 0;
+    const pgSql = sql.replace(/\?/g, () => '$' + (++i));
+    const res = await pool.query(pgSql, params);
+    return { rows: res.rows };
+  };
+} else {
+  engine = 'sqlite';
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(path.join(DATA_DIR, 'hrms.db'));
+  db.exec('PRAGMA journal_mode = WAL');
+  query = async (sql, params = []) => {
+    const stmt = db.prepare(sql);
+    if (/^\s*(select|with)/i.test(sql) || /returning/i.test(sql)) {
+      return { rows: stmt.all(...params) };
+    }
+    stmt.run(...params);
+    return { rows: [] };
+  };
+}
 
-# Google Drive (documents copy + daily backups)
-# 1. console.cloud.google.com → create project → enable "Google Drive API"
-# 2. Create a Service Account → download its JSON key
-# 3. Create a Drive folder, share it with the service account's email (Editor)
-# GOOGLE_SERVICE_ACCOUNT_JSON=./service-account.json
-# DRIVE_FOLDER_ID=the-folder-id-from-its-url
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS employees (
+  id TEXT PRIMARY KEY,
+  empId TEXT UNIQUE,
+  passportNo TEXT,
+  name TEXT,
+  email TEXT,
+  status TEXT DEFAULT 'Active',
+  data TEXT
+);
+CREATE TABLE IF NOT EXISTS leaves (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  status TEXT DEFAULT 'Pending',
+  data TEXT
+);
+CREATE TABLE IF NOT EXISTS payslips (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  month TEXT,
+  data TEXT
+);
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  name TEXT,
+  type TEXT,
+  size TEXT,
+  filename TEXT,
+  driveLink TEXT,
+  uploadedAt TEXT,
+  uploader TEXT
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  isRead INTEGER DEFAULT 0,
+  data TEXT
+);
+CREATE TABLE IF NOT EXISTS admins (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE,
+  name TEXT,
+  isSuperAdmin INTEGER DEFAULT 0,
+  permissions TEXT DEFAULT '[]',
+  createdAt TEXT
+);
+CREATE TABLE IF NOT EXISTS otps (
+  target TEXT PRIMARY KEY,
+  code TEXT,
+  expires BIGINT
+);
+CREATE TABLE IF NOT EXISTS audit (
+  seq INTEGER PRIMARY KEY ${'$'}{AUTOINC},
+  t TEXT,
+  usr TEXT,
+  action TEXT
+);
+CREATE TABLE IF NOT EXISTS config (
+  k TEXT PRIMARY KEY,
+  v TEXT
+);
+`;
 
-# Daily backup time (cron format, server time). Default 03:00.
-# BACKUP_CRON=0 3 * * *
+async function init() {
+  const autoinc = engine === 'postgres' ? 'GENERATED ALWAYS AS IDENTITY' : 'AUTOINCREMENT';
+  const ddl = SCHEMA.replace('${AUTOINC}', autoinc);
+  for (const stmt of ddl.split(';').map(s => s.trim()).filter(Boolean)) {
+    await query(stmt);
+  }
+  // migration: fix the OTP expiry column on databases created before this fix
+  if (engine === 'postgres') {
+    try { await query('ALTER TABLE otps ALTER COLUMN expires TYPE BIGINT'); } catch (e) {}
+  }
+}  
+
+module.exports = { query, init, engine, DATA_DIR };
