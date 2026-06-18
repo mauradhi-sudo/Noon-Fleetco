@@ -278,6 +278,24 @@ async function upsert(emp) {
     }
 
     console.log('✓ Seeded 4 camps, 3 rooms, and 1 bed allocation (SN1366 → Al Quoz 101, Bed 1).');
+
+    // ── Sample fleet assets: bikes + SIM cards (one of each assigned to SN1366) ──
+    const plus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+    const snRow = await query('SELECT id FROM employees WHERE empId = ?', ['SN1366']);
+    const snId = snRow.rows.length ? snRow.rows[0].id : null;
+    const assetSeed = [
+      { type: 'bike', code: 'BIKE001', name: '', status: snId ? 'Assigned' : 'Available', to: snId, data: { plateNo: 'DXB 12345', chassisNo: 'MLHJC4110', engineNo: 'JC41E', brand: 'Honda', model: 'CB125F', registrationExpiry: plus(20), insuranceExpiry: plus(75) } },
+      { type: 'bike', code: 'BIKE002', name: '', status: 'Maintenance', to: null, data: { plateNo: 'DXB 12346', brand: 'Honda', model: 'CB125F', registrationExpiry: plus(120), insuranceExpiry: plus(8) } },
+      { type: 'bike', code: 'BIKE003', name: '', status: 'Available', to: null, data: { plateNo: 'DXB 12347', brand: 'Yamaha', model: 'NMAX', registrationExpiry: plus(200), insuranceExpiry: plus(210) } },
+      { type: 'sim', code: 'SIM001', name: '', status: snId ? 'Assigned' : 'Available', to: snId, data: { number: '971501234567', provider: 'Du', puk: '12345678', remarks: '' } },
+      { type: 'sim', code: 'SIM002', name: '', status: 'Available', to: null, data: { number: '971501234568', provider: 'Etisalat', puk: '87654321', remarks: '' } },
+    ];
+    for (const a of assetSeed) {
+      const data = Object.assign({}, a.data, { createdAt: today() });
+      await query('INSERT INTO assets (id, type, code, name, status, assignedTo, assignedDate, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [uid('AS'), a.type, a.code, a.name, a.status, a.to, a.to ? today() : null, JSON.stringify(data)]);
+    }
+    console.log('✓ Seeded 3 bikes + 2 SIM cards (BIKE001 & SIM001 assigned to SN1366).');
   } else {
     console.log(`✓ Database already has ${c} employees — nothing to seed.`);
   }

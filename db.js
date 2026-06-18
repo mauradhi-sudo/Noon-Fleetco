@@ -125,6 +125,26 @@ CREATE TABLE IF NOT EXISTS bed_allocations (
   checkIn TEXT,
   data TEXT
 );
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY,
+  type TEXT DEFAULT 'other',
+  code TEXT,
+  name TEXT,
+  status TEXT DEFAULT 'Available',
+  assignedTo TEXT,
+  assignedDate TEXT,
+  data TEXT
+);
+CREATE TABLE IF NOT EXISTS acc_history (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  campId TEXT,
+  roomId TEXT,
+  bed TEXT,
+  checkIn TEXT,
+  checkOut TEXT,
+  data TEXT
+);
 `;
 
 async function init() {

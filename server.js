@@ -64,6 +64,7 @@ const rowToAdmin = (r) => ({ id: r.id, email: r.email, name: r.name, isSuperAdmi
 const rowToCamp  = (r) => Object.assign(J(r.data, {}), { id: r.id, name: r.name });
 const rowToRoom  = (r) => Object.assign(J(r.data, {}), { id: r.id, campId: r.campid ?? r.campId, building: r.building || '', floor: r.floor || '', roomNo: r.roomno ?? r.roomNo, capacity: +(r.capacity || 0) });
 const rowToAlloc = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, campId: r.campid ?? r.campId, roomId: r.roomid ?? r.roomId, bed: String(r.bed ?? ''), checkIn: r.checkin ?? r.checkIn });
+const rowToAsset = (r) => Object.assign(J(r.data, {}), { id: r.id, type: r.type || 'other', code: r.code || '', name: r.name || '', status: r.status || 'Available', assignedTo: r.assignedto ?? r.assignedTo ?? null, assignedDate: r.assigneddate ?? r.assignedDate ?? null });
 
 async function audit(user, action) { try { await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]); } catch (e) { } }
 async function notify(employeeId, type, title, message) { try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) { } }
@@ -97,11 +98,11 @@ app.post('/api/auth/admin/verify-otp', async (req, res) => { try { const email =
 
 app.post('/api/auth/employee/login', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); const pass = String(req.body.passportNo || '').trim(); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length || (r.rows[0].passportno ?? r.rows[0].passportNo) !== pass) return res.status(401).json({ error: 'Invalid credentials' }); const e = rowToEmp(r.rows[0]); if (e.status === 'Inactive') return res.status(403).json({ error: 'Account inactive' }); if (!e.email) return res.status(400).json({ error: 'No email on file' }); const code = await issueOtp('emp:' + e.empId); const sent = await mailer.sendOtp(e.email, code); const masked = e.email.replace(/^(..).*(@.*)$/, '$1•••$2'); res.json({ otpRequired: true, message: 'OTP sent to ' + masked, email: masked, ...(sent.dev ? { _devOtp: code } : {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/auth/employee/verify-otp', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); if (!await checkOtp('emp:' + empId, req.body.otp)) return res.status(401).json({ error: 'Incorrect code' }); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); await audit(e.name, 'Employee login'); res.json({ token: token({ role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }), role: 'employee', empId: e.empId, name: e.name }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/auth/employee/verify-otp', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); if (!await checkOtp('emp:' + empId, req.body.otp)) return res.status(401).json({ error: 'Incorrect code' }); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); await audit(e.name, 'Employee login'); res.json({ token: token({ role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }), role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/employees', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM employees WHERE id = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToEmp)); } const r = await query('SELECT * FROM employees ORDER BY empId', []); res.json(r.rows.map(rowToEmp)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/employees/:id', auth, async (req, res) => { try { const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); res.json(rowToEmp(r.rows[0])); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/employees/:id', auth, async (req, res) => { try { if (req.user.role === 'employee' && req.params.id !== req.user.employeeId) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); res.json(rowToEmp(r.rows[0])); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.post('/api/employees', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const id = uid('E'); const emp = req.body; await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, emp.empId, emp.passportNo, emp.name, emp.email, emp.status || 'Active', JSON.stringify(emp)]); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -332,6 +333,199 @@ app.delete('/api/accommodation/allocations/:id', auth, async (req, res) => {
     await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
     await audit(req.user.name, 'Bed vacated');
     res.json({ message: 'Vacated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Record an accommodation exit: archive the stay (check-in -> check-out) then free the bed.
+app.post('/api/accommodation/allocations/:id/exit', auth, async (req, res) => {
+  try {
+    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM bed_allocations WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Allocation not found' });
+    const a = rowToAlloc(r.rows[0]);
+    const checkOut = req.body.checkOut || today();
+    if (a.checkIn && String(checkOut) < String(a.checkIn)) return res.status(400).json({ error: 'Exit date cannot be before the check-in date' });
+    await query('INSERT INTO acc_history (id, employeeId, campId, roomId, bed, checkIn, checkOut, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [uid('AH'), a.employeeId, a.campId, a.roomId, a.bed, a.checkIn || '', checkOut, JSON.stringify({ checkIn: a.checkIn || '', checkOut })]);
+    await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
+    await notify(a.employeeId, 'info', 'Accommodation exit recorded', `Checked out on ${checkOut}`);
+    await audit(req.user.name, `Accommodation exit: emp ${a.employeeId} checked out ${checkOut}`);
+    res.json({ message: 'Exit recorded' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Past accommodation stays (check-in/check-out records)
+app.get('/api/accommodation/history', auth, async (req, res) => {
+  try {
+    const camps = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
+    const rooms = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
+    const emps  = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    let rows = (await query('SELECT * FROM acc_history', [])).rows.map(h => ({
+      id: h.id, employeeId: h.employeeid ?? h.employeeId, campId: h.campid ?? h.campId,
+      roomId: h.roomid ?? h.roomId, bed: String(h.bed ?? ''), checkIn: h.checkin ?? h.checkIn, checkOut: h.checkout ?? h.checkOut
+    }));
+    if (req.user.role === 'employee') rows = rows.filter(h => h.employeeId === req.user.employeeId);
+    else if (req.query.employeeId)    rows = rows.filter(h => h.employeeId === req.query.employeeId);
+    rows.sort((a, b) => String(b.checkOut || '').localeCompare(String(a.checkOut || '')));
+    res.json(rows.map(h => {
+      const c = camps.find(x => x.id === h.campId) || {};
+      const rm = rooms.find(x => x.id === h.roomId) || {};
+      const e = emps.find(x => x.id === h.employeeId) || {};
+      return Object.assign({}, h, { campName: c.name || '', roomNo: rm.roomNo || '', empName: e.name || '', empCode: e.empId || '' });
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ─── Fleet Assets: bikes, SIM cards, and custom assets ───── */
+function canManageAssets(req) { return isSuperAdmin(req) || hasPermission(req, 'manage_assets'); }
+
+// days until a YYYY-MM-DD date (negative = already expired); null if no date
+function daysUntil(d) {
+  if (!d) return null;
+  const t = new Date(String(d).split('T')[0]);
+  if (isNaN(t)) return null;
+  return Math.ceil((t - new Date(today())) / 86400000);
+}
+
+function enrichAsset(a, emps) {
+  const e = emps.find(x => x.id === a.assignedTo) || {};
+  return Object.assign({}, a, { holderName: e.name || '', holderCode: e.empId || '' });
+}
+
+app.get('/api/assets', auth, async (req, res) => {
+  try {
+    const emps = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    let assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset);
+    if (req.user.role === 'employee') assets = assets.filter(a => a.assignedTo === req.user.employeeId);
+    if (req.query.type)       assets = assets.filter(a => a.type === req.query.type);
+    if (req.query.status)     assets = assets.filter(a => a.status === req.query.status);
+    if (req.query.assignedTo) assets = assets.filter(a => a.assignedTo === req.query.assignedTo);
+    assets.sort((a, b) => String(a.type).localeCompare(String(b.type)) || String(a.code).localeCompare(String(b.code), undefined, { numeric: true }));
+    res.json(assets.map(a => enrichAsset(a, emps)));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Dashboard counts + registration/insurance expiry alerts
+app.get('/api/assets/summary', auth, async (req, res) => {
+  try {
+    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset);
+    const byType = t => assets.filter(a => a.type === t);
+    const countStatus = (arr, s) => arr.filter(a => a.status === s).length;
+    const bikes = byType('bike'), sims = byType('sim'), other = byType('other');
+
+    const within = (d, lo, hi) => { const n = daysUntil(d); return n != null && n >= lo && n <= hi; };
+    const expSoon = (field) => bikes
+      .filter(b => { const n = daysUntil(b[field]); return n != null && n <= 30; })
+      .map(b => ({ id: b.id, code: b.code, name: b.name, plateNo: b.plateNo || '', date: b[field] || '', days: daysUntil(b[field]),
+                   holder: (emps.find(e => e.id === b.assignedTo) || {}).name || '' }))
+      .sort((a, b) => a.days - b.days);
+
+    res.json({
+      bike: {
+        total: bikes.length,
+        assigned: countStatus(bikes, 'Assigned'),
+        available: countStatus(bikes, 'Available'),
+        maintenance: countStatus(bikes, 'Maintenance'),
+        accident: countStatus(bikes, 'Accident'),
+        inactive: countStatus(bikes, 'Inactive'),
+        registrationExpiring: bikes.filter(b => { const n = daysUntil(b.registrationExpiry); return n != null && n <= 30; }).length,
+        insuranceExpiring: bikes.filter(b => { const n = daysUntil(b.insuranceExpiry); return n != null && n <= 30; }).length,
+      },
+      sim: {
+        total: sims.length,
+        assigned: countStatus(sims, 'Assigned'),
+        available: countStatus(sims, 'Available'),
+        blocked: countStatus(sims, 'Blocked'),
+        lost: countStatus(sims, 'Lost'),
+        inactive: countStatus(sims, 'Inactive'),
+      },
+      other: { total: other.length, assigned: countStatus(other, 'Assigned'), available: countStatus(other, 'Available') },
+      registrationAlerts: expSoon('registrationExpiry'),
+      insuranceAlerts: expSoon('insuranceExpiry'),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets', auth, async (req, res) => {
+  try {
+    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const type = ['bike', 'sim', 'other'].includes(req.body.type) ? req.body.type : 'other';
+    const code = String(req.body.code || '').trim();
+    if (!code) return res.status(400).json({ error: (type === 'bike' ? 'Bike ID' : type === 'sim' ? 'SIM ID' : 'Asset ID') + ' is required' });
+    const dup = await query('SELECT id FROM assets WHERE type = ? AND LOWER(code) = ?', [type, code.toLowerCase()]);
+    if (dup.rows.length) return res.status(409).json({ error: 'An asset with that ID already exists' });
+    const status = String(req.body.status || 'Available').trim() || 'Available';
+    const name = String(req.body.name || '').trim();
+    const data = (req.body.data && typeof req.body.data === 'object') ? req.body.data : {};
+    data.createdAt = today();
+    const id = uid('AS');
+    await query('INSERT INTO assets (id, type, code, name, status, assignedTo, assignedDate, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, type, code, name, status, null, null, JSON.stringify(data)]);
+    await audit(req.user.name, `Asset added: ${type} ${code}`);
+    res.json({ id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/assets/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const cur = rowToAsset(r.rows[0]);
+    const code = req.body.code != null ? String(req.body.code).trim() : cur.code;
+    const name = req.body.name != null ? String(req.body.name).trim() : cur.name;
+    const status = req.body.status != null ? String(req.body.status).trim() : cur.status;
+    // merge custom/structured fields into data (preserve assignment + createdAt)
+    const base = J(r.rows[0].data, {});
+    const incoming = (req.body.data && typeof req.body.data === 'object') ? req.body.data : {};
+    const data = Object.assign({}, base, incoming);
+    await query('UPDATE assets SET code = ?, name = ?, status = ?, data = ? WHERE id = ?',
+      [code, name, status, JSON.stringify(data), req.params.id]);
+    await audit(req.user.name, `Asset updated: ${cur.type} ${code}`);
+    res.json({ message: 'Updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets/:id/assign', auth, async (req, res) => {
+  try {
+    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const employeeId = req.body.employeeId;
+    if (!employeeId) return res.status(400).json({ error: 'Employee is required' });
+    const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const emp = await query('SELECT id FROM employees WHERE id = ?', [employeeId]);
+    if (!emp.rows.length) return res.status(404).json({ error: 'Employee not found' });
+    const assignedDate = req.body.assignedDate || today();
+    await query('UPDATE assets SET assignedTo = ?, assignedDate = ?, status = ? WHERE id = ?',
+      [employeeId, assignedDate, 'Assigned', req.params.id]);
+    const a = rowToAsset(r.rows[0]);
+    await notify(employeeId, 'approved', 'Asset assigned', `${a.type === 'sim' ? 'SIM' : a.type === 'bike' ? 'Bike' : 'Asset'} ${a.code}`);
+    await audit(req.user.name, `Asset ${a.code} assigned to emp ${employeeId}`);
+    res.json({ message: 'Assigned' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets/:id/unassign', auth, async (req, res) => {
+  try {
+    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const status = String(req.body.status || 'Available').trim() || 'Available';
+    await query('UPDATE assets SET assignedTo = ?, assignedDate = ?, status = ? WHERE id = ?',
+      [null, null, status, req.params.id]);
+    const a = rowToAsset(r.rows[0]);
+    await audit(req.user.name, `Asset ${a.code} returned/unassigned`);
+    res.json({ message: 'Unassigned' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/assets/:id', auth, async (req, res) => {
+  try {
+    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    await query('DELETE FROM assets WHERE id = ?', [req.params.id]);
+    await audit(req.user.name, 'Asset deleted');
+    res.json({ message: 'Deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
