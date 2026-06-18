@@ -2,133 +2,418 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const XLSX = require('xlsx');
-const { query, init, engine, DATA_DIR } = require('./db');
-const mailer = require('./mailer');
+const { v4: uuidv4 } = require('uuid');
+const cors = require('cors');
+const { Pool } = require('pg');
+
 const app = express();
-const PORT = +(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || (() => {
-  const p = path.join(DATA_DIR, '.jwt_secret');
-  if (!fs.existsSync(p)) fs.writeFileSync(p, crypto.randomBytes(32).toString('hex'));
-  return fs.readFileSync(p, 'utf8');
-})();
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-const LEAVE_ATTACHMENTS_DIR = path.join(UPLOAD_DIR, 'leaves');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-fs.mkdirSync(LEAVE_ATTACHMENTS_DIR, { recursive: true });
-const upload = multer({
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Database
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+const query = async (sql, params) => {
+  try { return await pool.query(sql, params); } 
+  catch(e) { console.error('DB Error:', e); throw e; }
+};
+
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '25mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+const uploadDir = path.join(__dirname, 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
+const upload = multer({ 
   storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      const base = path.basename(file.originalname, ext).replace(/[^\w-]/g, '');
-      cb(null, Date.now() + '_' + base + ext);
-    }
+    destination: uploadDir,
+    filename: (req, file, cb) => cb(null, Date.now() + '_' + file.originalname.replace(/[^\w.-]/g, '_'))
   }),
   limits: { fileSize: 50 * 1024 * 1024 }
 });
-const uploadLeaveAttachment = multer({
-  storage: multer.diskStorage({
-    destination: LEAVE_ATTACHMENTS_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      const base = path.basename(file.originalname, ext).replace(/[^\w-]/g, '');
-      cb(null, Date.now() + '_' + base + ext);
+
+// Auth Middleware
+const auth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+const adminOnly = (req, res, next) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  next();
+};
+
+// ==================== AUTHENTICATION ====================
+
+app.post('/api/auth/login', async (req, res) => {
+  const { empId, passportNo } = req.body;
+  try {
+    const r = await query('SELECT * FROM employees WHERE "empId" = $1', [empId]);
+    if (!r.rows.length || r.rows[0].passportNo !== passportNo) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
-  }),
-  limits: { fileSize: 25 * 1024 * 1024 }
+    const emp = r.rows[0];
+    const token = jwt.sign({ role: 'employee', id: emp.id, empId: emp.empId }, JWT_SECRET, { expiresIn: '12h' });
+    res.json({ token, role: 'employee', empId: emp.empId, name: emp.name });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(UPLOAD_DIR));
-app.use(express.static(path.join(__dirname, 'public')));
-const now = () => new Date().toISOString();
-const today = () => now().slice(0, 10);
-const uid = (p) => p + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
-const J = (v, fb = {}) => { try { return JSON.parse(v); } catch (e) { return fb; } };
 
-// Date parsing utility for Excel
-function parseExcelDate(value) {
-  if (!value || value === '') return null;
-  if (typeof value === 'number') {
-    const date = new Date((value - 25569) * 86400 * 1000);
-    return date.toISOString().split('T')[0];
+app.post('/api/auth/admin-login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const r = await query('SELECT * FROM admins WHERE email = $1', [email]);
+    if (!r.rows.length || r.rows[0].password !== password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const admin = r.rows[0];
+    const token = jwt.sign({ role: 'admin', id: admin.id, email: admin.email }, JWT_SECRET, { expiresIn: '12h' });
+    res.json({ token, role: 'admin', email: admin.email, name: admin.name });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
   }
-  if (typeof value === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-    const parsed = new Date(value);
-    if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
-  }
-  return null;
-}
+});
 
-const DATE_FIELDS = ['dob', 'contractStartDate', 'contractEndDate', 'joiningDate', 'tentativeJoiningDate', 'evisaExpiry', 'evisaDate', 'onbCallDate', 'handoverToONBDate', 'docsReceivedDate', 'employmentContractSentDate', 'employmentContractAcceptedDate', 'employmentOfferRejectedDate', 'requestForMOHREJODate', 'mohreJOReceivedDate', 'mohreJOSignedDate', 'laborApprovalDate', 'statusChangeCompletionDate', 'medicalDate', 'medicalInsuranceEnrollmentDate', 'medicalInsuranceCardReceivedDate', 'eidApplicationDate', 'eresidencyReceivedDate', 'eidReceivedDate', 'eidDispatchDate', 'passportReceivedDate', 'biometricDate', 'myzoiCardsRequestDate', 'myzoiCardsDispatchDate', 'tawjeehContractSubmissionDate', 'laborCardGeneratedDate', 'iloeRegistrationDate', 'travelDate', 'accommodationArrivalDate', 'drivingSchoolStartDate', 'induction', 'deploymentDate'];
+// ==================== EMPLOYEES ====================
 
-const rowToEmp = (r) => Object.assign(J(r.data, {}), { id: r.id, empId: r.empid ?? r.empId, passportNo: r.passportno ?? r.passportNo, name: r.name, email: r.email, status: r.status });
-const rowToLeave = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, status: r.status });
-const rowToPs = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, month: r.month });
-const rowToNotif = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, isRead: +(r.isread ?? r.isRead) });
-const rowToAdmin = (r) => ({ id: r.id, email: r.email, name: r.name, isSuperAdmin: +(r.issuperadmin ?? r.isSuperAdmin), permissions: J(r.permissions, []), createdAt: r.createdat ?? r.createdAt });
-async function audit(user, action) { try { await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]); } catch (e) { } }
-async function notify(employeeId, type, title, message) { try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) { } }
-function token(payload) { return jwt.sign(payload, JWT_SECRET, { expiresIn: '12h' }); }
-function auth(req, res, next) {
-  const h = (req.headers.authorization || '').trim();
-  const t = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (!t) return res.status(401).json({ error: 'Not signed in' });
-  try { req.user = jwt.verify(t, JWT_SECRET); next(); } catch (e) { res.status(401).json({ error: 'Session expired' }); }
-}
-function isSuperAdmin(req) { return req.user && (req.user.isSuperAdmin === 1 || req.user.isSuperAdmin === true); }
-function hasPermission(req, perm) { return isSuperAdmin(req) || (req.user && (req.user.permissions || []).includes(perm)); }
-async function issueOtp(target) {
-  const code = String(crypto.randomInt(100000, 999999));
-  await query('DELETE FROM otps WHERE target = ?', [target]);
-  await query('INSERT INTO otps (target, code, expires) VALUES (?, ?, ?)', [target, code, Date.now() + 10 * 60 * 1000]);
-  return code;
-}
-async function checkOtp(target, code) {
-  const r = await query('SELECT * FROM otps WHERE target = ?', [target]);
-  if (!r.rows.length || r.rows[0].expires < Date.now() || r.rows[0].code !== String(code)) return false;
-  await query('DELETE FROM otps WHERE target = ?', [target]);
-  return true;
-}
-app.post('/api/auth/admin/request-otp', async (req, res) => { try { const email = String(req.body.email || '').trim().toLowerCase(); const r = await query('SELECT * FROM admins WHERE LOWER(email) = ?', [email]); if (!r.rows.length) return res.status(404).json({ error: 'Admin not found' }); const code = await issueOtp('admin:' + email); const sent = await mailer.sendOtp(email, code); res.json({ message: 'OTP sent to ' + email, ...(sent.dev ? { _devOtp: code } : {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/auth/admin/verify-otp', async (req, res) => { try { const email = String(req.body.email || '').trim().toLowerCase(); if (!await checkOtp('admin:' + email, req.body.otp)) return res.status(401).json({ error: 'Incorrect code' }); const r = await query('SELECT * FROM admins WHERE LOWER(email) = ?', [email]); if (!r.rows.length) return res.status(404).json({ error: 'Admin not found' }); const a = rowToAdmin(r.rows[0]); await audit(a.name, 'Admin login'); res.json({ token: token({ role: 'admin', adminId: a.id, name: a.name, email: a.email, isSuperAdmin: a.isSuperAdmin, permissions: a.permissions }), role: 'admin', name: a.name, email: a.email, isSuperAdmin: a.isSuperAdmin, permissions: a.permissions }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/auth/employee/login', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); const pass = String(req.body.passportNo || '').trim(); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length || (r.rows[0].passportno ?? r.rows[0].passportNo) !== pass) return res.status(401).json({ error: 'Invalid credentials' }); const e = rowToEmp(r.rows[0]); if (e.status === 'Inactive') return res.status(403).json({ error: 'Account inactive' }); if (!e.email) return res.status(400).json({ error: 'No email on file' }); const code = await issueOtp('emp:' + e.empId); const sent = await mailer.sendOtp(e.email, code); const masked = e.email.replace(/^(..).*(@.*)$/, '$1•••$2'); res.json({ otpRequired: true, message: 'OTP sent to ' + masked, email: masked, ...(sent.dev ? { _devOtp: code } : {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/auth/employee/verify-otp', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); if (!await checkOtp('emp:' + empId, req.body.otp)) return res.status(401).json({ error: 'Incorrect code' }); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); await audit(e.name, 'Employee login'); res.json({ token: token({ role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }), role: 'employee', empId: e.empId, name: e.name }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/employees', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM employees WHERE id = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToEmp)); } const limit = +(req.query.limit || 100); const offset = +(req.query.offset || 0); const r = await query('SELECT * FROM employees ORDER BY empId LIMIT ? OFFSET ?', [limit, offset]); res.json(r.rows.map(rowToEmp)); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/employees/:id', auth, async (req, res) => { try { const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); res.json(rowToEmp(r.rows[0])); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/employees', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const id = uid('E'); const emp = req.body; await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, emp.empId, emp.passportNo, emp.name, emp.email, emp.status || 'Active', JSON.stringify(emp)]); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.patch('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.put('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.patch('/api/employees/:id/status', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); e.status = req.body.status; await query('UPDATE employees SET status = ?, data = ? WHERE id = ?', [req.body.status, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); await query('DELETE FROM employees WHERE id = ?', [req.params.id]); await query('DELETE FROM leaves WHERE employeeId = ?', [e.id]); await query('DELETE FROM payslips WHERE employeeId = ?', [e.id]); await query('DELETE FROM documents WHERE employeeId = ?', [e.id]); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; let added = 0, updated = 0; for (const row of rows) { const existing = await query('SELECT id FROM employees WHERE empId = ?', [row.empId]); if (existing.rows.length) { const e = rowToEmp(await query('SELECT * FROM employees WHERE empId = ?', [row.empId])); Object.assign(e, row); for (const df of DATE_FIELDS) if (e[df]) e[df] = parseExcelDate(e[df]); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE empId = ?', [e.name, e.email, e.status || 'Active', e.passportNo, JSON.stringify(e), row.empId]); updated++; } else { const id = uid('E'); const emp = { ...row }; for (const df of DATE_FIELDS) if (emp[df]) emp[df] = parseExcelDate(emp[df]); await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, emp.empId, emp.passportNo, emp.name, emp.email, emp.status || 'Active', JSON.stringify(emp)]); added++; } } await audit(req.user.name, 'Bulk import: +' + added + ', ~' + updated); res.json({ message: 'Imported', added, updated, total: added + updated }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/leaves', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM leaves WHERE employeeId = ? ORDER BY id DESC LIMIT 100', [req.user.employeeId]); return res.json(r.rows.map(rowToLeave)); } const limit = +(req.query.limit || 100); const r = await query('SELECT * FROM leaves ORDER BY id DESC LIMIT ?', [limit]); res.json(r.rows.map(rowToLeave)); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today() }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave submitted', 'Pending approval'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.patch('/api/leaves/:id/decide', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'approve_leaves')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const lv = rowToLeave(r.rows[0]); const newSt = req.body.decision === 'Approved' ? 'Approved' : 'Rejected'; lv.status = newSt; lv.decidedAt = today(); lv.decidedBy = req.user.name; await query('UPDATE leaves SET status = ?, data = ? WHERE id = ?', [newSt, JSON.stringify(lv), lv.id]); await notify(lv.employeeId, newSt === 'Approved' ? 'approved' : 'rejected', 'Leave ' + newSt, newSt); res.json({ message: newSt }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/leaves/:id/attachments', auth, uploadLeaveAttachment.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); if (lv.employeeId !== req.user.employeeId && req.user.role === 'employee') return res.status(403).json({ error: 'No permission' }); if (!lv.attachments) lv.attachments = []; lv.attachments.push({ name: req.body.name || req.file.originalname, filename: req.file.filename, uploadedAt: today(), uploadedBy: req.user.name }); await query('UPDATE leaves SET data = ? WHERE id = ?', [JSON.stringify(lv), lv.id]); res.json({ message: 'Attachment added', filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/leaves/:id/attachments', auth, async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); res.json(lv.attachments || []); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/leaves/:id/attachments/:filename/download', async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); const att = (lv.attachments || []).find(a => a.filename === req.params.filename); if (!att) return res.status(404).json({ error: 'Attachment not found' }); const filepath = path.join(LEAVE_ATTACHMENTS_DIR, att.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, att.name || att.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/leaves/export', async (req, res) => { try { const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); const leaves = r.rows.map(rowToLeave).map(l => ({ 'Employee ID': l.empId || '', 'Employee Name': l.empName || '', 'Type': l.type || '', 'From Date': l.fromDate || '', 'To Date': l.toDate || '', 'Days': l.days || 0, 'Status': l.status || '', 'Applied On': l.appliedOn || '', 'Decided By': l.decidedBy || '', 'Decided At': l.decidedAt || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(leaves); XLSX.utils.book_append_sheet(wb, ws, 'Leaves'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', 'attachment; filename="leaves_' + today() + '.xlsx"'); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/employees/export', async (req, res) => { try { const r = await query('SELECT * FROM employees ORDER BY empId', []); const emps = r.rows.map(rowToEmp).map(e => ({ 'Employee ID': e.empId || '', 'Name': e.name || '', 'Email': e.email || '', 'Passport': e.passportNo || '', 'Status': e.status || 'Active', 'Position': e.position || '', 'Department': e.department || '', 'Location': e.location || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(emps); XLSX.utils.book_append_sheet(wb, ws, 'Employees'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', 'attachment; filename="employees_' + today() + '.xlsx"'); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/payslips/export', async (req, res) => { try { const r = await query('SELECT * FROM payslips ORDER BY month DESC', []); const ps = r.rows.map(rowToPs).map(p => ({ 'Employee ID': p.employeeId || '', 'Month': p.month || '', 'Basic': p.basic || 0, 'Allowances': p.allowances || 0, 'Deductions': p.deductions || 0, 'Net Pay': p.netPay || p.net_pay || 0 })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(ps); XLSX.utils.book_append_sheet(wb, ws, 'Payslips'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', 'attachment; filename="payslips_' + today() + '.xlsx"'); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/payslips', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM payslips WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToPs)); } const r = await query('SELECT * FROM payslips ORDER BY month DESC LIMIT 100', []); res.json(r.rows.map(rowToPs)); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/payslips/bulk', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_payroll')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; for (const row of rows) await query('INSERT INTO payslips (id, employeeId, month, data) VALUES (?, ?, ?, ?)', [uid('P'), row.employeeId, req.body.month, JSON.stringify(row)]); await audit(req.user.name, 'Payslips generated: ' + rows.length); res.json({ message: 'Generated', count: rows.length }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/documents', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM documents WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } const r = await query('SELECT * FROM documents ORDER BY uploadedAt DESC LIMIT 100', []); res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const id = uid('D'); await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, req.file.filename, today(), req.user.name]); res.json({ id, filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/documents/:id/download', async (req, res) => { try { const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; const filepath = path.join(UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, d.name || d.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/notifications', auth, async (req, res) => { try { const id = req.user.role === 'employee' ? req.user.employeeId : '__none__'; const r = await query('SELECT * FROM notifications WHERE employeeId = ? ORDER BY id DESC LIMIT 100', [id]); res.json(r.rows.map(rowToNotif)); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.patch('/api/notifications/read-all', auth, async (req, res) => { try { const id = req.user.role === 'employee' ? req.user.employeeId : '__none__'; await query('UPDATE notifications SET isRead = 1 WHERE employeeId = ?', [id]); res.json({ message: 'Marked as read' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/admins', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM admins ORDER BY createdAt', []); res.json(r.rows.map(rowToAdmin)); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.post('/api/admins', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const id = uid('A'); const code = await issueOtp('admin:' + req.body.email.toLowerCase()); await mailer.sendOtp(req.body.email, code); await query('INSERT INTO admins (id, email, name, isSuperAdmin, permissions, createdAt) VALUES (?, ?, ?, 0, ?, ?)', [id, req.body.email.toLowerCase(), req.body.name, JSON.stringify(req.body.permissions || []), today()]); await audit(req.user.name, 'Admin created: ' + req.body.email); res.json({ id, message: 'OTP sent to ' + req.body.email }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/audit', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM audit ORDER BY seq DESC LIMIT 500', []); res.json(r.rows.map(x => ({ t: x.t, user: x.usr, action: x.action }))); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/config', auth, async (req, res) => { try { const r = await query('SELECT v FROM config WHERE k = ?', ['cfg']); res.json(r.rows.length ? J(r.rows[0].v, {}) : {}); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/dashboard/metrics', auth, async (req, res) => { try { const empCount = await query('SELECT COUNT(*) as cnt FROM employees', []); const activeCount = await query('SELECT COUNT(*) as cnt FROM employees WHERE status = ?', ['Active']); const leaveCount = await query('SELECT COUNT(*) as cnt FROM leaves WHERE status = ?', ['Pending']); const totalEmp = empCount.rows[0]?.cnt || 0; const activeEmp = activeCount.rows[0]?.cnt || 0; res.json({ totalEmployees: totalEmp, activeEmployees: activeEmp, pendingLeaves: leaveCount.rows[0]?.cnt || 0, payslipsIssued: 0 }); } catch (e) { res.status(500).json({ error: e.message }); } });
-app.get('/api/health', (req, res) => res.json({ ok: true, engine, timestamp: now() }));
-init().then(async () => { const email = (process.env.SUPER_ADMIN_EMAIL || 'mauradhi@noon.com').toLowerCase(); const r = await query('SELECT id FROM admins WHERE isSuperAdmin = 1', []); if (!r.rows.length) { await query('INSERT INTO admins (id, email, name, isSuperAdmin, permissions, createdAt) VALUES (?, ?, ?, 1, ?, ?)', ['admin-001', email, 'Super Admin', '[]', today()]); console.log('✓ Super admin created: ' + email); } app.listen(PORT, () => console.log('✓ HRMS server running on port ' + PORT)); }).catch(e => { console.error('✗ Startup failed:', e.message); process.exit(1); });
+app.get('/api/employees', auth, adminOnly, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM employees ORDER BY "empId" LIMIT 100');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/employees/me', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM employees WHERE id = $1', [req.user.id]);
+    res.json(r.rows[0] || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/employees', auth, adminOnly, async (req, res) => {
+  const { empId, name, passportNo, email } = req.body;
+  try {
+    const id = uuidv4();
+    await query(
+      'INSERT INTO employees (id, "empId", name, "passportNo", email) VALUES ($1, $2, $3, $4, $5)',
+      [id, empId, name, passportNo, email]
+    );
+    res.json({ id, message: 'Created' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== LEAVES ====================
+
+app.get('/api/leaves', auth, async (req, res) => {
+  try {
+    const empId = req.user.role === 'employee' ? req.user.id : null;
+    const query_str = empId 
+      ? 'SELECT * FROM leaves WHERE "employeeId" = $1 LIMIT 100'
+      : 'SELECT * FROM leaves LIMIT 100';
+    const params = empId ? [empId] : [];
+    const r = await query(query_str, params);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/leaves', auth, async (req, res) => {
+  const { fromDate, toDate, type, reason, days } = req.body;
+  try {
+    const id = uuidv4();
+    await query(
+      'INSERT INTO leaves (id, "employeeId", type, "fromDate", "toDate", reason, days, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [id, req.user.id, type, fromDate, toDate, reason, days || 1, 'Pending']
+    );
+    res.json({ id, message: 'Leave applied' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/leaves/:id/approve', auth, adminOnly, async (req, res) => {
+  const { decision } = req.body;
+  try {
+    await query('UPDATE leaves SET status = $1 WHERE id = $2', [decision, req.params.id]);
+    res.json({ message: 'Updated' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== PAYROLL ====================
+
+app.get('/api/payslips', auth, async (req, res) => {
+  try {
+    const empId = req.user.role === 'employee' ? req.user.id : null;
+    const query_str = empId 
+      ? 'SELECT * FROM payslips WHERE "employeeId" = $1 LIMIT 100'
+      : 'SELECT * FROM payslips LIMIT 100';
+    const params = empId ? [empId] : [];
+    const r = await query(query_str, params);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/payslips', auth, adminOnly, async (req, res) => {
+  const { employeeId, month, basicSalary, allowances, deductions } = req.body;
+  try {
+    const id = uuidv4();
+    const netSalary = (basicSalary || 0) + (allowances || 0) - (deductions || 0);
+    await query(
+      'INSERT INTO payslips (id, "employeeId", month, "basicSalary", allowances, deductions, "netSalary") VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, employeeId, month, basicSalary, allowances, deductions, netSalary]
+    );
+    res.json({ id, message: 'Payslip created' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ASSETS ====================
+
+app.get('/api/assets', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM assets LIMIT 100');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/assets/:id', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM assets WHERE id = $1', [req.params.id]);
+    res.json(r.rows[0] || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets', auth, adminOnly, async (req, res) => {
+  const { name, type, serialNumber, registrationDate, insuranceExpiry, maintenanceDate } = req.body;
+  try {
+    const id = uuidv4();
+    await query(
+      'INSERT INTO assets (id, name, type, "serialNumber", "registrationDate", "insuranceExpiry", "maintenanceDate", status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [id, name, type, serialNumber, registrationDate, insuranceExpiry, maintenanceDate, 'Available']
+    );
+    res.json({ id, message: 'Asset created' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets/:id/assign', auth, adminOnly, async (req, res) => {
+  const { employeeId, assignmentDate } = req.body;
+  try {
+    const assignId = uuidv4();
+    await query(
+      'INSERT INTO "assetAssignments" (id, "assetId", "employeeId", "assignmentDate", status) VALUES ($1, $2, $3, $4, $5)',
+      [assignId, req.params.id, employeeId, assignmentDate, 'Active']
+    );
+    await query('UPDATE assets SET status = $1 WHERE id = $2', ['Assigned', req.params.id]);
+    res.json({ id: assignId, message: 'Asset assigned' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/assets/:id/return', auth, async (req, res) => {
+  const { returnDate, condition } = req.body;
+  try {
+    const r = await query('SELECT * FROM "assetAssignments" WHERE "assetId" = $1 AND status = $2', [req.params.id, 'Active']);
+    if (r.rows.length) {
+      await query('UPDATE "assetAssignments" SET status = $1, "returnDate" = $2, condition = $3 WHERE id = $4',
+        ['Returned', returnDate, condition, r.rows[0].id]
+      );
+      await query('UPDATE assets SET status = $1 WHERE id = $2', ['Available', req.params.id]);
+    }
+    res.json({ message: 'Asset returned' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/assets/employee/:empId', auth, async (req, res) => {
+  try {
+    const r = await query(
+      'SELECT a.* FROM assets a JOIN "assetAssignments" aa ON a.id = aa."assetId" WHERE aa."employeeId" = $1 AND aa.status = $2',
+      [req.params.empId, 'Active']
+    );
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== ACCOMMODATION ====================
+
+app.get('/api/accommodation/camps', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM camps');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/camps', auth, adminOnly, async (req, res) => {
+  const { name, location, manager } = req.body;
+  try {
+    const id = uuidv4();
+    await query('INSERT INTO camps (id, name, location, manager) VALUES ($1, $2, $3, $4)', [id, name, location, manager]);
+    res.json({ id, message: 'Camp created' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/accommodation/rooms/:campId', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM rooms WHERE "campId" = $1', [req.params.campId]);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/rooms', auth, adminOnly, async (req, res) => {
+  const { campId, roomNumber, capacity, subdivision } = req.body;
+  try {
+    const id = uuidv4();
+    await query('INSERT INTO rooms (id, "campId", "roomNumber", capacity, subdivision, status) VALUES ($1, $2, $3, $4, $5, $6)',
+      [id, campId, roomNumber, capacity, subdivision, 'Available']
+    );
+    res.json({ id, message: 'Room created' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/accommodation/assign', auth, adminOnly, async (req, res) => {
+  const { employeeId, roomId, checkInDate } = req.body;
+  try {
+    const id = uuidv4();
+    await query('INSERT INTO "roomAssignments" (id, "roomId", "employeeId", "checkInDate", status) VALUES ($1, $2, $3, $4, $5)',
+      [id, roomId, employeeId, checkInDate, 'Active']
+    );
+    await query('UPDATE rooms SET status = $1 WHERE id = $2', ['Occupied', roomId]);
+    res.json({ id, message: 'Room assigned' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/accommodation/employee/:empId', auth, async (req, res) => {
+  try {
+    const r = await query(
+      'SELECT r.*, ra."checkInDate" FROM rooms r JOIN "roomAssignments" ra ON r.id = ra."roomId" WHERE ra."employeeId" = $1 AND ra.status = $2',
+      [req.params.empId, 'Active']
+    );
+    res.json(r.rows[0] || {});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== DOCUMENTS ====================
+
+app.get('/api/documents', auth, async (req, res) => {
+  try {
+    const empId = req.user.role === 'employee' ? req.user.id : null;
+    const query_str = empId 
+      ? 'SELECT * FROM documents WHERE "employeeId" = $1'
+      : 'SELECT * FROM documents';
+    const params = empId ? [empId] : [];
+    const r = await query(query_str, params);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/documents/upload', auth, upload.single('file'), async (req, res) => {
+  const { category, expiryDate } = req.body;
+  try {
+    const id = uuidv4();
+    await query(
+      'INSERT INTO documents (id, "employeeId", name, category, filename, "expiryDate", "uploadDate") VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, req.user.id, req.file.originalname, category, req.file.filename, expiryDate, new Date().toISOString()]
+    );
+    res.json({ id, message: 'Document uploaded' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/documents/:id/download', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM documents WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const file = path.join(uploadDir, r.rows[0].filename);
+    res.download(file);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== NOTIFICATIONS ====================
+
+app.get('/api/notifications', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM notifications WHERE "employeeId" = $1 ORDER BY "createdAt" DESC', [req.user.id]);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/notifications/:id/read', auth, async (req, res) => {
+  try {
+    await query('UPDATE notifications SET "isRead" = true WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Marked as read' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== EXIT REQUESTS ====================
+
+app.post('/api/exit-request', auth, async (req, res) => {
+  const { reason } = req.body;
+  try {
+    const id = uuidv4();
+    await query('INSERT INTO "exitRequests" (id, "employeeId", reason, status, "requestDate") VALUES ($1, $2, $3, $4, $5)',
+      [id, req.user.id, reason, 'Pending', new Date().toISOString()]
+    );
+    res.json({ id, message: 'Exit request submitted' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/exit-requests', auth, adminOnly, async (req, res) => {
+  try {
+    const r = await query('SELECT * FROM "exitRequests" WHERE status = $1', ['Pending']);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/exit-requests/:id/approve', auth, adminOnly, async (req, res) => {
+  const { decision } = req.body;
+  try {
+    await query('UPDATE "exitRequests" SET status = $1, "approvedDate" = $2 WHERE id = $3',
+      [decision === 'approved' ? 'Approved' : 'Rejected', new Date().toISOString(), req.params.id]
+    );
+    res.json({ message: 'Updated' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== DASHBOARD ====================
+
+app.get('/api/dashboard', auth, adminOnly, async (req, res) => {
+  try {
+    const emps = await query('SELECT COUNT(*) as count FROM employees');
+    const leaves = await query('SELECT COUNT(*) as count FROM leaves WHERE status = $1', ['Pending']);
+    const payslips = await query('SELECT COUNT(*) as count FROM payslips');
+    const assets = await query('SELECT COUNT(*) as count FROM assets WHERE status = $1', ['Available']);
+    const rooms = await query('SELECT COUNT(*) as count FROM rooms WHERE status = $1', ['Available']);
+    const docs = await query('SELECT COUNT(*) as count FROM documents');
+    
+    res.json({
+      totalEmployees: emps.rows[0]?.count || 0,
+      pendingLeaves: leaves.rows[0]?.count || 0,
+      payslipsIssued: payslips.rows[0]?.count || 0,
+      availableAssets: assets.rows[0]?.count || 0,
+      availableRooms: rooms.rows[0]?.count || 0,
+      documents: docs.rows[0]?.count || 0
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== HEALTH ====================
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, status: 'HRMS running' });
+});
+
+// ==================== START SERVER ====================
+
+app.listen(PORT, () => {
+  console.log(`✅ NOON FLEET HRMS running on port ${PORT}`);
+  console.log(`📊 Admin Portal: http://localhost:${PORT}/admin-portal.html`);
+  console.log(`👤 Employee Portal: http://localhost:${PORT}/employee-portal.html`);
+});
+
 module.exports = app;
