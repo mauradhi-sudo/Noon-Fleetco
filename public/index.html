@@ -371,6 +371,16 @@ let S = {
   accSearch:     '',        // bed-allocation search box
   editingRoom:   null,
   assignDraft:   null,
+  assets:        null,      // fleet assets (bikes/sims/other)
+  assetSummary:  null,      // dashboard counts + expiry alerts
+  accHistory:    null,      // past accommodation stays
+  assetTab:      'bike',    // bike | sim | other
+  assetSearch:   '',
+  assetStatusFilter: '',
+  editingAsset:  null,
+  assetTypeDraft:'bike',
+  assignAssetDraft: null,   // { assetId, employeeId, assignedDate }
+  accExitDraft:  null,      // { id, checkIn, checkOut }
   loading:       false
 };
  
@@ -422,7 +432,18 @@ async function api(method, path, data, isFormData) {
   }
   const res  = await fetch(API + '/api' + path, opts);
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Request failed');
+  if (!res.ok) {
+    // A 401 on an authenticated call means the token is no longer valid
+    // (expired, or the server's secret changed) — return to the login screen
+    // cleanly instead of leaving the page stuck on "Loading…".
+    if (res.status === 401 && S.token && !path.startsWith('/auth/')) {
+      S.token = ''; S.user = null; S.screen = 'login';
+      try { localStorage.removeItem('hrms_token'); localStorage.removeItem('hrms_user'); } catch (e) {}
+      S.loginErr = 'Your session expired — please sign in again.';
+      R();
+    }
+    throw new Error(json.error || 'Request failed');
+  }
   return json;
 }
  
@@ -433,11 +454,13 @@ async function loadData(force) {
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
       if (!S.documents     || force) S.documents     = await api('GET', '/documents');
+      if (!S.assetSummary  || force) { try { S.assetSummary = await api('GET', '/assets/summary'); } catch (e) {} }
     } else if (S.screen === 'employee') {
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
       if (!S.notifications || force) S.notifications = await api('GET', '/notifications');
       if (!S.allocations   || force) S.allocations   = await api('GET', '/accommodation/allocations');
+      if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) { S.assets = []; } }
     }
   } catch (e) { console.error('loadData error:', e); }
 }
@@ -528,7 +551,9 @@ async function verifyEmpOtp() {
     S.empOtpStep = 'creds';
     S.employees = S.leaves = S.payslips = S.notifications = S.documents = null;
     await loadData();
-    S.viewEmp = await api('GET', '/employees/' + res.empId);
+    const own = await api('GET', '/employees');   // employee role → returns own record only
+    S.employees = own;
+    S.viewEmp = (own && own[0]) || null;
     R();
   } catch (e) {
     S.loginErr = e.message;
@@ -633,12 +658,13 @@ function renderAdmin() {
     ...(can('view_payroll') ? [['payroll', 'ti-cash', 'Payroll', '']] : []),
     ...(can('view_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
     ...(can('view_accommodation') ? [['accommodation', 'ti-bed', 'Accommodation', '']] : []),
+    ...(can('view_assets') ? [['assets', 'ti-motorbike', 'Fleet Assets', '']] : []),
     ...(can('manage_settings') ? [['settings', 'ti-settings', 'Settings', '']] : []),
     ...(isSuperAdmin ? [['admins', 'ti-shield-half', 'Admin Users', ''], ['audit', 'ti-history', 'Audit Log', '']] : [])
   ];
   const titles = {
     dashboard: 'Dashboard', employees: 'Employees', import: 'Bulk Import', leaves: 'Leave Requests',
-    payroll: 'Payroll', documents: 'Documents', accommodation: 'Accommodation', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
+    payroll: 'Payroll', documents: 'Documents', accommodation: 'Accommodation', assets: 'Fleet Assets', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
     empview: S.viewEmp?.name || 'Employee', psview: 'Payslip'
   };
  
@@ -652,6 +678,7 @@ function renderAdmin() {
   else if (S.nav === 'payroll')   content = renderPayrollPage();
   else if (S.nav === 'documents') content = renderDocsPage();
   else if (S.nav === 'accommodation') content = renderAccommodation();
+  else if (S.nav === 'assets')        content = renderAssets();
   else if (S.nav === 'admins')    content = renderAdminsPage();
   else if (S.nav === 'empview' && S.viewEmp)     content = renderEmpDetail();
   else if (S.nav === 'psview'  && S.viewPayslip) content = renderPsPage();
@@ -747,6 +774,7 @@ function renderDashboard() {
     ${card('ti-id-badge','var(--red)','#FCEBEB','Visas expiring ≤90 days',expir.toLocaleString(),'visa_expiring')}
     ${card('ti-cash','var(--green)','var(--green-light)','Monthly payroll',aed(payTot),'payroll')}
   </div>
+  ${renderDashAssets()}
   <div class="card"><div class="card-head"><h3>Workforce status</h3>
     <span style="font-size:11px;color:var(--muted)"><span style="color:var(--green)">●</span> Working &nbsp;<span style="color:var(--amber)">●</span> On leave &nbsp;<span style="color:var(--red)">●</span> Inactive</span></div>
   <div class="card-body" style="padding:1rem 1.25rem">
@@ -822,47 +850,50 @@ function rmEntity(kind, i) {
 /* ─── Dashboard Metrics Viewer ───────────────────────── */
 async function viewDashMetric(key) {
   try {
-    const m = await api('GET', '/dashboard/metrics');
-    S.dashMetric = { key, metrics: m };
-    openModal('dashmetric');
-  } catch (e) {
-    alert('Error loading metrics: ' + e.message);
-  }
+    if (!S.employees) S.employees = await api('GET', '/employees');
+    if (!S.leaves)    S.leaves    = await api('GET', '/leaves');
+  } catch (e) {}
+  S.dashMetric = { key };
+  openModal('dashmetric');
 }
 function renderDashMetricModal() {
   const m = S.dashMetric || {}; if (!m.key) return '';
-  const metrics = m.metrics || {};
-  const allEmps = [...(metrics.details?.activeAndWorking || []), ...(metrics.details?.onLeave || []), ...(metrics.details?.inactive || [])];
-  const details = {
-    total_emp: { title: 'All employees', list: allEmps },
-    active_emp: { title: 'Active & working', list: metrics.details?.activeAndWorking || [] },
-    on_leave: { title: 'On leave today', list: metrics.details?.onLeave || [] },
-    inactive: { title: 'Inactive', list: metrics.details?.inactive || [] },
-    pending_leaves: { title: 'Pending leave requests', list: metrics.details?.pendingLeavesList || [] },
-    visa_expiring: { title: 'Visas expiring ≤90 days', list: metrics.details?.visasExpiringList || [] },
-    payroll: { title: 'Monthly payroll total', total: metrics.totalPayroll }
-  };
-  const d = details[m.key] || {};
-  const listHTML = d.list && d.list.length ? d.list.map((item, i) => {
-    if (m.key === 'total_emp') return `<tr><td>${item.empId}</td><td>${item.name}</td></tr>`;
-    if (m.key === 'on_leave') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${item.leaveType}</td><td>${fmtDate(item.fromDate)} → ${fmtDate(item.toDate)}</td></tr>`;
-    if (m.key === 'inactive' || m.key === 'active_emp') return `<tr><td>${item.empId}</td><td>${item.name}</td></tr>`;
-    if (m.key === 'visa_expiring') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${fmtDate(item.expiryDate)}</td><td>${item.daysLeft} days</td></tr>`;
-    if (m.key === 'pending_leaves') return `<tr><td>${item.empId}</td><td>${item.name}</td><td>${item.type}</td><td>${fmtDate(item.fromDate)}</td><td>${item.days}d</td><td>${fmtDate(item.appliedOn)}</td></tr>`;
-    return '';
-  }).join('') : '<tr><td colspan="10" style="text-align:center;padding:1rem;color:var(--muted)">None</td></tr>';
- 
-  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:700px">
-    <div class="modal-head"><h3>${d.title}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+  const es = S.employees || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const cutoff90 = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
+  const leaveOf = {};
+  (S.leaves || []).forEach(l => { if (l.status === 'Approved' && String(l.fromDate) <= today && today <= String(l.toDate)) leaveOf[l.employeeId] = l; });
+  const active   = es.filter(e => e.status === 'Active');
+  const onLeave  = active.filter(e => leaveOf[e.id]);
+  const working  = active.filter(e => !leaveOf[e.id]);
+  const inactive = es.filter(e => e.status !== 'Active');
+  const visaExp  = active.filter(e => e.evisaExpiry && e.evisaExpiry <= cutoff90).sort((a, b) => String(a.evisaExpiry).localeCompare(String(b.evisaExpiry)));
+  const pending  = (S.leaves || []).filter(l => l.status === 'Pending');
+  const payTot   = (S.payslips || []).reduce((s, p) => s + +(J(p.data, {}).netPay || J(p.data, {}).net_pay || 0), 0);
+
+  const dleft = d => Math.ceil((new Date(String(d).split('T')[0]) - new Date(today)) / 864e5);
+  const empCells = e => `<td><b>${e.empId || '—'}</b></td><td>${e.name || '—'}</td><td style="font-family:monospace">${e.passportNo || '—'}</td>`;
+  const rowClick = e => `onclick="openModal(null);viewEmp('${e.id}')" style="cursor:pointer"`;
+  const empHead = '<th>Emp ID</th><th>Name</th><th>Passport</th>';
+
+  let title = '', headHTML = '', rowsHTML = '', note = '';
+  if (m.key === 'total_emp')        { title = 'All employees';            headHTML = empHead + '<th>Position</th><th>Status</th>'; rowsHTML = es.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.status || '—'}</td></tr>`).join(''); }
+  else if (m.key === 'active_emp')  { title = 'Active & working';         headHTML = empHead + '<th>Position</th><th>Location</th>'; rowsHTML = working.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.location || '—'}</td></tr>`).join(''); }
+  else if (m.key === 'on_leave')    { title = 'On leave today';           headHTML = empHead + '<th>Leave type</th><th>Dates</th>'; rowsHTML = onLeave.map(e => { const l = leaveOf[e.id] || {}; return `<tr ${rowClick(e)}>${empCells(e)}<td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td></tr>`; }).join(''); }
+  else if (m.key === 'inactive')    { title = 'Inactive employees';       headHTML = empHead + '<th>Position</th>'; rowsHTML = inactive.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td></tr>`).join(''); }
+  else if (m.key === 'visa_expiring'){ title = 'Visas expiring ≤90 days'; headHTML = empHead + '<th>Visa expiry</th><th>Days left</th>'; rowsHTML = visaExp.map(e => { const n = dleft(e.evisaExpiry); return `<tr ${rowClick(e)}>${empCells(e)}<td style="color:${n<=30?'var(--red)':'var(--text)'};font-weight:${n<=30?'700':'400'}">${fmtDate(e.evisaExpiry)}</td><td>${n} days</td></tr>`; }).join(''); }
+  else if (m.key === 'pending_leaves'){ title = 'Pending leave requests'; headHTML = '<th>Emp ID</th><th>Name</th><th>Type</th><th>From → To</th><th>Days</th><th>Applied</th>'; rowsHTML = pending.map(l => `<tr><td><b>${l.empId || '—'}</b></td><td>${l.empName || '—'}</td><td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td><td>${l.days || '—'}</td><td>${fmtDate(l.appliedOn)}</td></tr>`).join(''); }
+  else if (m.key === 'payroll')     { title = 'Monthly payroll'; note = `<p style="font-size:15px"><b>Total net pay:</b> <span style="color:var(--green);font-weight:700">${aed(payTot)}</span> across ${(S.payslips||[]).length} payslip(s).</p>`; }
+
+  const colCount = (headHTML.match(/<th>/g) || []).length || 3;
+  const body = rowsHTML || `<tr><td colspan="${colCount}" style="text-align:center;padding:1.5rem;color:var(--muted)">No records.</td></tr>`;
+
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:760px">
+    <div class="modal-head"><h3>${title}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
     <div class="modal-body">
-      ${d.total ? `<p style="font-size:16px"><b>Total:</b> <span style="color:var(--green);font-weight:600">${aed(d.total)}</span></p>` : ''}
-      ${d.list && d.list.length ? `<div class="tbl-wrap"><table><thead><tr>
-        ${m.key === 'total_emp' ? '<th>ID</th><th>Name</th>' : ''}
-        ${m.key === 'on_leave' ? '<th>ID</th><th>Name</th><th>Leave type</th><th>Dates</th>' : ''}
-        ${m.key === 'inactive' || m.key === 'active_emp' ? '<th>ID</th><th>Name</th>' : ''}
-        ${m.key === 'visa_expiring' ? '<th>ID</th><th>Name</th><th>Expiry</th><th>Days left</th>' : ''}
-        ${m.key === 'pending_leaves' ? '<th>ID</th><th>Name</th><th>Type</th><th>From</th><th>Days</th><th>Applied</th>' : ''}
-      </tr></thead><tbody>${listHTML}</tbody></table></div>` : '<p style="text-align:center;color:var(--muted);padding:1rem">No data</p>'}
+      ${note}
+      ${headHTML ? `<div class="tbl-wrap"><table><thead><tr>${headHTML}</tr></thead><tbody>${body}</tbody></table></div>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px">Tip: click a row to open that employee's full profile.</p>` : ''}
     </div>
     <div class="modal-foot"><button class="btn" onclick="openModal(null)">Close</button></div>
   </div></div>`;
@@ -1337,7 +1368,7 @@ function renderEmpDetail() {
   ${e.status==='Inactive' ? `<div class="alert alert-e"><i class="ti ti-user-off"></i>Employee is inactive — cannot log in or apply for leaves.</div>` : ''}
   ${prob && e.status==='Active' ? `<div class="probation-bar"><i class="ti ti-clock"></i>On probation — leave applications restricted until 6 months from ${fmtDate(e.joiningDate)}.</div>` : ''}
   <div class="tabs-bar">
-    ${[['personal','Personal'],['passport','Visa'],['employment','Employment'],['leaves','Leave'],['payslips','Payslips'],['documents','Documents'],['accommodation','Accommodation']]
+    ${[['personal','Personal'],['passport','Visa'],['employment','Employment'],['leaves','Leave'],['payslips','Payslips'],['documents','Documents'],['accommodation','Accommodation'],['assets','Assets']]
       .map(([k, l]) => `<div class="tab-btn ${tab===k?'active':''}" onclick="S.profileTab='${k}';R()">${l}</div>`).join('')}
   </div>
   ${tab==='personal'    ? renderPersonalTab(e) : ''}
@@ -1346,7 +1377,8 @@ function renderEmpDetail() {
   ${tab==='leaves'      ? renderLeavesTab(e, myLeaves, bal, true) : ''}
   ${tab==='payslips'    ? renderPayslipsTab(myPayslips) : ''}
   ${tab==='documents'   ? renderDocumentsTab(myDocs, e.id, true) : ''}
-  ${tab==='accommodation' ? renderAccommodationTab(e) : ''}`;
+  ${tab==='accommodation' ? renderAccommodationTab(e) : ''}
+  ${tab==='assets' ? renderEmpAssetsTab(e) : ''}`;
 }
  
 function renderPersonalTab(e) {
@@ -1692,7 +1724,8 @@ function renderEmpSelfProfile(emp, prob) {
     <div class="info-cell"><div class="lbl">Deployment date</div><div class="val">${fmtDate(emp.deploymentDate)||'—'}</div></div>
     <div class="info-cell"><div class="lbl">Bank / IBAN</div><div class="val" style="font-size:11px">${fmt(emp.bankName)||'—'}${emp.iban ? ' · ' + emp.iban : ''}</div></div>
   </div>
-  ${renderEmpAccSection(emp)}`;
+  ${renderEmpAccSection(emp)}
+  ${renderEmpAssetsSelf(emp)}`;
 }
 
 function renderEmpAccSection(emp) {
@@ -1824,6 +1857,9 @@ function renderModal() {
   if (m === 'addCamp')                          return renderCampModal();
   if (m === 'roomModal')                        return renderRoomModal();
   if (m === 'assignBed')                        return renderAssignModal();
+  if (m === 'assetModal')                       return renderAssetModal();
+  if (m === 'assignAsset')                      return renderAssignAssetModal();
+  if (m === 'accExit')                          return renderAccExitModal();
   return '';
 }
  
@@ -2031,6 +2067,7 @@ async function setNav(n) {
     return;
   }
   if (n === 'accommodation') { await loadAccommodation(true); R(); return; }
+  if (n === 'assets') { await loadAssets(true); R(); return; }
   await loadData(false);
   R();
 }
@@ -2042,6 +2079,8 @@ async function viewEmp(id) {
   if (!S.payslips)  S.payslips  = await api('GET', '/payslips');
   if (!S.documents) S.documents = await api('GET', '/documents');
   await loadAccommodation(false);
+  await loadAssets(false);
+  if (!S.accHistory) { try { S.accHistory = await api('GET', '/accommodation/history'); } catch (e) { S.accHistory = []; } }
   S.nav = 'empview';
   S.profileTab = 'personal';
   R();
@@ -2468,6 +2507,8 @@ const ALL_PERMISSIONS = [
   ['upload_documents',   'Upload documents'],
   ['view_accommodation', 'View accommodation & bed allocations'],
   ['manage_accommodation','Manage camps, rooms & bed allocations'],
+  ['view_assets',        'View fleet assets (bikes, SIMs)'],
+  ['manage_assets',      'Manage & assign fleet assets'],
   ['manage_settings',    'Manage custom fields & payroll entities'],
 ];
  
@@ -2751,6 +2792,11 @@ function renderAccommodationTab(e) {
   if (!e) return '';
   const a = (S.allocations || []).find(x => x.employeeId === e.id);
   const manage = accCanManage();
+  const past = (S.accHistory || []).filter(h => h.employeeId === e.id);
+  const historyBlock = past.length ? `<div class="section-label" style="margin-top:1.25rem">Previous stays</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Camp</th><th>Room</th><th>Bed</th><th>Check-in</th><th>Exited</th></tr></thead><tbody>
+    ${past.map(h => `<tr><td>${fmt(h.campName)}</td><td>${fmt(h.roomNo)}</td><td>Bed ${fmt(h.bed)}</td><td>${fmtDate(h.checkIn)}</td><td>${fmtDate(h.checkOut)}</td></tr>`).join('')}
+    </tbody></table></div>` : '';
   return `<div class="card"><div class="card-head"><h3>Accommodation</h3>
     ${manage ? `<button class="btn g" onclick="openAssignModal('${e.id}')"><i class="ti ti-bed"></i> ${a?'Change bed':'Assign bed'}</button>` : ''}
   </div><div class="card-body">
@@ -2760,8 +2806,9 @@ function renderAccommodationTab(e) {
       <div class="info-cell"><div class="lbl">Bed</div><div class="val">Bed ${fmt(a.bed)}</div></div>
       <div class="info-cell"><div class="lbl">Check-in</div><div class="val">${fmtDate(a.checkIn)}</div></div>
     </div>
-    ${manage ? `<div style="margin-top:1rem"><button class="btn sm" style="color:var(--red);border-color:var(--red)" onclick="vacateBed('${a.id}')"><i class="ti ti-bed-off"></i> Vacate bed</button></div>` : ''}`
-    : `<div class="alert alert-i"><i class="ti ti-bed"></i>No accommodation has been assigned to this employee yet.</div>`}
+    ${manage ? `<div style="margin-top:1rem"><button class="btn sm" style="color:var(--red);border-color:var(--red)" onclick="vacateBed('${a.id}')"><i class="ti ti-bed-off"></i> Record exit / vacate</button></div>` : ''}`
+    : `<div class="alert alert-i"><i class="ti ti-bed"></i>Not currently staying in any accommodation.</div>`}
+    ${historyBlock}
   </div></div>`;
 }
 
@@ -2956,10 +3003,429 @@ async function saveAssign() {
 }
 
 async function vacateBed(id) {
-  if (!confirm('Vacate this bed? The employee will no longer be assigned to it.')) return;
+  // Vacating now records the stay (check-in -> check-out) before freeing the bed.
+  openAccExit(id);
+}
+
+/* ─── Fleet Assets (Bikes · SIM cards · Other) ─────────────── */
+function assetCanManage() {
+  return !!(S.user && (S.user.isSuperAdmin || (S.user.permissions || []).includes('manage_assets')));
+}
+
+async function loadAssets(force) {
   try {
-    await api('DELETE', '/accommodation/allocations/' + id);
+    if (!S.employees || force) {
+      try { S.employees = await api('GET', '/employees'); } catch (e) { if (!S.employees) S.employees = []; }
+    }
+    if (!S.assets || force)        S.assets = await api('GET', '/assets');
+    if (!S.assetSummary || force) { try { S.assetSummary = await api('GET', '/assets/summary'); } catch (e) {} }
+  } catch (e) { console.error('loadAssets error:', e); }
+}
+
+async function loadAccHistory(force) {
+  try { if (!S.accHistory || force) S.accHistory = await api('GET', '/accommodation/history'); }
+  catch (e) { S.accHistory = []; }
+}
+
+// known (structured) data keys per type — anything else in data is a custom field
+const ASSET_KNOWN = {
+  bike: ['plateNo', 'chassisNo', 'engineNo', 'brand', 'model', 'registrationExpiry', 'insuranceExpiry'],
+  sim:  ['number', 'provider', 'puk', 'remarks'],
+  other: []
+};
+function assetStatuses(type) {
+  if (type === 'bike') return ['Available', 'Assigned', 'Maintenance', 'Accident', 'Inactive'];
+  if (type === 'sim')  return ['Available', 'Assigned', 'Blocked', 'Lost', 'Inactive'];
+  return ['Available', 'Assigned', 'Inactive'];
+}
+function assetStatusBadge(s) {
+  const map = { Available: 'bg', Assigned: 'bb', Maintenance: 'ba', Accident: 'br', Blocked: 'br', Lost: 'br', Inactive: 'bgr' };
+  return `<span class="badge ${map[s] || 'bgr'}">${s || '—'}</span>`;
+}
+function daysLeft(d) {
+  if (!d) return null;
+  const t = new Date(String(d).split('T')[0]);
+  if (isNaN(t)) return null;
+  return Math.ceil((t - new Date(new Date().toISOString().slice(0, 10))) / 86400000);
+}
+function expiryCell(d) {
+  if (!d) return '<span style="color:var(--faint)">—</span>';
+  const n = daysLeft(d);
+  let col = 'var(--text)';
+  if (n != null && n <= 7) col = 'var(--red)';
+  else if (n != null && n <= 30) col = 'var(--amber)';
+  const tag = n != null ? (n < 0 ? ' (expired)' : n <= 30 ? ` (${n}d)` : '') : '';
+  return `<span style="color:${col};font-weight:${(n!=null&&n<=30)?'700':'400'}">${fmtDate(d)}${tag}</span>`;
+}
+function assetTypeLabel(t) { return t === 'bike' ? 'Bike' : t === 'sim' ? 'SIM' : 'Asset'; }
+
+/* Dashboard cards + expiry alert banners */
+function renderDashAssets() {
+  const s = S.assetSummary;
+  if (!s) return '';
+  const b = s.bike || {}, m = s.sim || {};
+  const acard = (icon, color, bg, lbl, val) => `<div class="stat" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="setNav('assets')">
+    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+    <div><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div></div>
+  </div>`;
+  const regN = b.registrationExpiring || 0, insN = b.insuranceExpiring || 0;
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+    ${acard('ti-motorbike', '#185FA5', '#E6F1FB', 'Total bikes', (b.total || 0).toLocaleString())}
+    ${acard('ti-user-check', 'var(--blue)', '#E6F1FB', 'Bikes assigned', (b.assigned || 0).toLocaleString())}
+    ${acard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Bikes available', (b.available || 0).toLocaleString())}
+    ${acard('ti-tools', 'var(--amber)', '#FAEEDA', 'In maintenance', (b.maintenance || 0).toLocaleString())}
+  </div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+    ${acard('ti-device-mobile', '#185FA5', '#E6F1FB', 'Total SIMs', (m.total || 0).toLocaleString())}
+    ${acard('ti-user-check', 'var(--blue)', '#E6F1FB', 'SIMs assigned', (m.assigned || 0).toLocaleString())}
+    ${acard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'SIMs available', (m.available || 0).toLocaleString())}
+    ${acard('ti-ban', 'var(--red)', '#FCEBEB', 'SIMs blocked', (m.blocked || 0).toLocaleString())}
+  </div>
+  ${(regN || insN) ? `<div style="margin-bottom:1.25rem">
+    ${regN ? `<div class="alert alert-w" style="cursor:pointer;margin-bottom:8px" onclick="setNav('assets')"><i class="ti ti-alert-triangle"></i><div><b>${regN}</b> bike${regN !== 1 ? 's' : ''} with registration expiring within 30 days — open Fleet Assets to review.</div></div>` : ''}
+    ${insN ? `<div class="alert alert-w" style="cursor:pointer" onclick="setNav('assets')"><i class="ti ti-alert-triangle"></i><div><b>${insN}</b> bike${insN !== 1 ? 's' : ''} with insurance expiring within 30 days — open Fleet Assets to review.</div></div>` : ''}
+  </div>` : ''}`;
+}
+
+function renderAssets() {
+  const all = S.assets || [];
+  const manage = assetCanManage();
+  const tab = S.assetTab || 'bike';
+  const counts = t => {
+    const a = all.filter(x => x.type === t);
+    return { total: a.length, assigned: a.filter(x => x.status === 'Assigned').length, available: a.filter(x => x.status === 'Available').length };
+  };
+  const cb = counts('bike'), cs = counts('sim'), co = counts('other');
+  const s = S.assetSummary || {};
+  const regA = (s.registrationAlerts || []), insA = (s.insuranceAlerts || []);
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    <div class="stat"><div class="lbl">Bikes</div><div class="val">${cb.total}</div></div>
+    <div class="stat"><div class="lbl">SIMs</div><div class="val">${cs.total}</div></div>
+    <div class="stat"><div class="lbl">Other assets</div><div class="val">${co.total}</div></div>
+    <div class="stat"><div class="lbl">Assigned</div><div class="val" style="color:var(--blue)">${cb.assigned + cs.assigned + co.assigned}</div></div>
+    <div class="stat"><div class="lbl">Available</div><div class="val" style="color:var(--green)">${cb.available + cs.available + co.available}</div></div>
+  </div>
+  ${tab === 'bike' && (regA.length || insA.length) ? `<div class="card" style="margin-bottom:1.25rem"><div class="card-head"><h3><i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Expiry alerts (≤30 days)</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th style="width:18%">Bike ID</th><th style="width:16%">Plate</th><th style="width:22%">Type</th><th style="width:22%">Expiry</th><th style="width:22%">Holder</th></tr></thead><tbody>
+    ${[...regA.map(a => ['Registration', a]), ...insA.map(a => ['Insurance', a])]
+      .sort((x, y) => (x[1].days) - (y[1].days))
+      .map(([kind, a]) => `<tr>
+        <td><b>${a.code}</b></td><td>${a.plateNo || '—'}</td><td>${kind}</td>
+        <td>${expiryCell(a.date)}</td><td>${a.holder || '<span style="color:var(--faint)">Unassigned</span>'}</td>
+      </tr>`).join('')}
+    </tbody></table></div></div>` : ''}
+  <div class="tabs-bar">
+    <div class="tab-btn ${tab === 'bike' ? 'active' : ''}" onclick="S.assetTab='bike';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-motorbike"></i> Bikes</div>
+    <div class="tab-btn ${tab === 'sim' ? 'active' : ''}" onclick="S.assetTab='sim';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-device-mobile"></i> SIM Cards</div>
+    <div class="tab-btn ${tab === 'other' ? 'active' : ''}" onclick="S.assetTab='other';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-box"></i> Other</div>
+  </div>
+  ${renderAssetTable(tab, manage)}`;
+}
+
+function renderAssetTable(type, manage) {
+  const q = (S.assetSearch || '').toLowerCase();
+  const sf = S.assetStatusFilter || '';
+  let list = (S.assets || []).filter(a => a.type === type);
+  if (sf) list = list.filter(a => a.status === sf);
+  if (q) list = list.filter(a =>
+    (a.code || '').toLowerCase().includes(q) || (a.name || '').toLowerCase().includes(q) ||
+    (a.plateNo || '').toLowerCase().includes(q) || (a.number || '').toLowerCase().includes(q) ||
+    (a.brand || '').toLowerCase().includes(q) || (a.model || '').toLowerCase().includes(q) ||
+    (a.holderName || '').toLowerCase().includes(q) || (a.holderCode || '').toLowerCase().includes(q));
+
+  const head = type === 'bike'
+    ? `<th style="width:13%">Bike ID</th><th style="width:12%">Plate</th><th style="width:16%">Brand / Model</th><th style="width:13%">Reg. expiry</th><th style="width:13%">Ins. expiry</th><th style="width:10%">Status</th><th style="width:13%">Holder</th><th style="width:10%"></th>`
+    : type === 'sim'
+    ? `<th style="width:16%">SIM ID</th><th style="width:20%">Number</th><th style="width:16%">Provider</th><th style="width:12%">PUK</th><th style="width:12%">Status</th><th style="width:14%">Holder</th><th style="width:10%"></th>`
+    : `<th style="width:20%">Asset ID</th><th style="width:34%">Name / description</th><th style="width:14%">Status</th><th style="width:20%">Holder</th><th style="width:12%"></th>`;
+  const cols = type === 'other' ? 5 : type === 'sim' ? 7 : 8;
+
+  const rowHolder = a => a.assignedTo
+    ? `<div style="font-size:12px"><b>${a.holderName || '—'}</b><br><span style="color:var(--muted)">${a.holderCode || ''} · ${fmtDate(a.assignedDate)}</span></div>`
+    : '<span style="color:var(--faint)">Unassigned</span>';
+  const actions = a => manage ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="btn sm" onclick="openAssetModal('${type}','${a.id}')"><i class="ti ti-edit"></i></button>
+      ${a.assignedTo
+        ? `<button class="btn sm" style="color:var(--amber);border-color:var(--amber)" onclick="unassignAsset('${a.id}')" title="Return / unassign"><i class="ti ti-arrow-back-up"></i></button>`
+        : `<button class="btn sm" style="color:var(--green);border-color:var(--green)" onclick="openAssignAssetModal('${a.id}','')" title="Assign"><i class="ti ti-user-plus"></i></button>`}
+      <button class="btn sm" style="color:var(--red);border-color:var(--red)" onclick="deleteAsset('${a.id}')"><i class="ti ti-trash"></i></button>
+    </div>` : '';
+
+  const body = list.length === 0
+    ? `<tr><td colspan="${cols}" style="text-align:center;padding:2rem;color:var(--muted)">No ${type === 'bike' ? 'bikes' : type === 'sim' ? 'SIM cards' : 'assets'} ${(q || sf) ? 'match your filter' : 'yet'}.</td></tr>`
+    : list.map(a => type === 'bike'
+      ? `<tr><td><b>${a.code}</b></td><td>${a.plateNo || '—'}</td><td>${[a.brand, a.model].filter(Boolean).join(' / ') || '—'}</td>
+          <td>${expiryCell(a.registrationExpiry)}</td><td>${expiryCell(a.insuranceExpiry)}</td>
+          <td>${assetStatusBadge(a.status)}</td><td>${rowHolder(a)}</td><td>${actions(a)}</td></tr>`
+      : type === 'sim'
+      ? `<tr><td><b>${a.code}</b></td><td style="font-family:monospace">${a.number || '—'}</td><td>${a.provider || '—'}</td>
+          <td style="font-family:monospace">${a.puk || '—'}</td><td>${assetStatusBadge(a.status)}</td><td>${rowHolder(a)}</td><td>${actions(a)}</td></tr>`
+      : `<tr><td><b>${a.code}</b></td><td>${a.name || '—'}</td><td>${assetStatusBadge(a.status)}</td><td>${rowHolder(a)}</td><td>${actions(a)}</td></tr>`
+    ).join('');
+
+  return `<div class="card">
+    <div class="card-head">
+      <h3>${type === 'bike' ? 'Bike Master' : type === 'sim' ? 'SIM Master' : 'Other Assets'}</h3>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <input id="assetsrch" value="${S.assetSearch || ''}" placeholder="Search…"
+               oninput="S.assetSearch=this.value;R();var el=document.getElementById('assetsrch');if(el){el.focus();el.setSelectionRange(this.value.length,this.value.length);}"
+               style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:170px"/>
+        <select onchange="S.assetStatusFilter=this.value;R()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="">All statuses</option>
+          ${assetStatuses(type).map(s => `<option value="${s}" ${sf === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+        ${manage ? `<button class="btn g" onclick="openAssetModal('${type}','')"><i class="ti ti-plus"></i> Add ${type === 'bike' ? 'bike' : type === 'sim' ? 'SIM' : 'asset'}</button>` : ''}
+      </div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+  </div>`;
+}
+
+/* Admin employee-profile Assets tab */
+function renderEmpAssetsTab(e) {
+  if (!e) return '';
+  const mine = (S.assets || []).filter(a => a.assignedTo === e.id);
+  const manage = assetCanManage();
+  const block = (type, label, icon) => {
+    const items = mine.filter(a => a.type === type);
+    if (!items.length) return '';
+    return `<div class="section-label">${label}</div><div class="info-grid">${items.map(a => `
+      <div class="info-cell"><div class="lbl">${assetTypeLabel(type)} ID</div><div class="val"><i class="ti ${icon}"></i> ${a.code}</div></div>
+      ${type === 'bike' ? `<div class="info-cell"><div class="lbl">Plate</div><div class="val">${a.plateNo || '—'}</div></div>` : ''}
+      ${type === 'sim' ? `<div class="info-cell"><div class="lbl">Number</div><div class="val" style="font-family:monospace">${a.number || '—'}</div></div>` : ''}
+      ${type === 'other' ? `<div class="info-cell"><div class="lbl">Name</div><div class="val">${a.name || '—'}</div></div>` : ''}
+      <div class="info-cell"><div class="lbl">Assigned</div><div class="val">${fmtDate(a.assignedDate)}</div></div>
+      <div class="info-cell"><div class="lbl">Status</div><div class="val">${assetStatusBadge(a.status)} ${manage ? `<button class="btn sm" style="margin-left:6px;color:var(--amber);border-color:var(--amber)" onclick="unassignAsset('${a.id}')">Return</button>` : ''}</div></div>
+    `).join('')}</div>`;
+  };
+  const anyAssets = mine.length > 0;
+  return `<div class="card"><div class="card-head"><h3>Assigned assets</h3>
+    ${manage ? `<button class="btn g" onclick="openAssignAssetModal('','${e.id}')"><i class="ti ti-plus"></i> Assign asset</button>` : ''}
+  </div><div class="card-body">
+    ${anyAssets ? `${block('bike', 'Bike', 'ti-motorbike')}${block('sim', 'SIM card', 'ti-device-mobile')}${block('other', 'Other assets', 'ti-box')}`
+      : `<div class="alert alert-i"><i class="ti ti-box"></i>No assets are currently assigned to this employee.</div>`}
+  </div></div>`;
+}
+
+/* Read-only assets section in the employee self portal */
+function renderEmpAssetsSelf(emp) {
+  const mine = (S.assets || []).filter(a => !emp || a.assignedTo === emp.id || a.assignedTo === (S.user && S.user.empId));
+  if (!mine.length) {
+    return `<div class="section-label">My assets</div><div class="alert alert-i"><i class="ti ti-box"></i>No assets are currently assigned to you.</div>`;
+  }
+  return `<div class="section-label">My assets</div><div class="info-grid">${mine.map(a => `
+    <div class="info-cell"><div class="lbl">${assetTypeLabel(a.type)} ${a.type === 'other' ? '' : 'ID'}</div><div class="val">${a.code}${a.name ? ' · ' + a.name : ''}</div></div>
+    ${a.type === 'bike' ? `<div class="info-cell"><div class="lbl">Plate</div><div class="val">${a.plateNo || '—'}</div></div>` : ''}
+    ${a.type === 'sim' ? `<div class="info-cell"><div class="lbl">Number</div><div class="val" style="font-family:monospace">${a.number || '—'}</div></div>` : ''}
+    <div class="info-cell"><div class="lbl">Assigned on</div><div class="val">${fmtDate(a.assignedDate)}</div></div>
+  `).join('')}</div>`;
+}
+
+/* ─── Asset modals ─────────────────────────────────────────── */
+function openAssetModal(type, id) {
+  const editing = id ? (S.assets || []).find(a => a.id === id) : null;
+  S.editingAsset = editing || null;
+  S.assetTypeDraft = editing ? editing.type : (type || 'bike');
+  const known = ASSET_KNOWN[S.assetTypeDraft] || [];
+  const custom = [];
+  if (editing) {
+    Object.keys(editing).forEach(k => {
+      if (['id', 'type', 'code', 'name', 'status', 'assignedTo', 'assignedDate', 'holderName', 'holderCode', 'createdAt'].includes(k)) return;
+      if (known.includes(k)) return;
+      custom.push({ k, v: editing[k] });
+    });
+  }
+  S.assetCustom = custom;
+  openModal('assetModal');
+}
+function addAssetField() { if (!S.assetCustom) S.assetCustom = []; S.assetCustom.push({ k: '', v: '' }); R(); }
+function rmAssetField(i) { (S.assetCustom || []).splice(i, 1); R(); }
+
+function renderAssetModal() {
+  const a = S.editingAsset;
+  const type = S.assetTypeDraft || 'bike';
+  const editing = !!a;
+  const v = (k) => editing && a[k] != null ? String(a[k]).replace(/"/g, '&quot;') : '';
+  const idLabel = type === 'bike' ? 'Bike ID' : type === 'sim' ? 'SIM ID' : 'Asset ID';
+  const fieldsByType = type === 'bike' ? `
+        <div class="field"><label>Plate number</label><input id="as-plateNo" value="${v('plateNo')}" placeholder="DXB 12345"/></div>
+        <div class="field"><label>Chassis number</label><input id="as-chassisNo" value="${v('chassisNo')}"/></div>
+        <div class="field"><label>Engine number</label><input id="as-engineNo" value="${v('engineNo')}"/></div>
+        <div class="field"><label>Brand</label><input id="as-brand" value="${v('brand')}" placeholder="Honda"/></div>
+        <div class="field"><label>Model</label><input id="as-model" value="${v('model')}" placeholder="CB125"/></div>
+        <div class="field"><label>Registration expiry</label><input id="as-registrationExpiry" type="date" value="${v('registrationExpiry')}"/></div>
+        <div class="field"><label>Insurance expiry</label><input id="as-insuranceExpiry" type="date" value="${v('insuranceExpiry')}"/></div>`
+    : type === 'sim' ? `
+        <div class="field"><label>Mobile number</label><input id="as-number" value="${v('number')}" placeholder="971501234567"/></div>
+        <div class="field"><label>Provider</label><input id="as-provider" value="${v('provider')}" placeholder="Du / Etisalat"/></div>
+        <div class="field"><label>PUK number</label><input id="as-puk" value="${v('puk')}"/></div>
+        <div class="field full"><label>Remarks</label><input id="as-remarks" value="${v('remarks')}"/></div>`
+    : `<div class="field full"><label>Name / description</label><input id="as-name" value="${v('name')}" placeholder="e.g. Helmet, Delivery box"/></div>`;
+
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
+    <div class="modal-head"><h3><i class="ti ${type === 'bike' ? 'ti-motorbike' : type === 'sim' ? 'ti-device-mobile' : 'ti-box'}"></i> ${editing ? 'Edit' : 'Add'} ${type === 'bike' ? 'bike' : type === 'sim' ? 'SIM' : 'asset'}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label>${idLabel}</label><input id="as-code" value="${v('code')}" placeholder="${type === 'bike' ? 'BIKE001' : type === 'sim' ? 'SIM001' : 'AST001'}" ${editing ? 'disabled' : ''}/></div>
+        <div class="field"><label>Status</label><select id="as-status">${assetStatuses(type).map(s => `<option ${editing && a.status === s ? 'selected' : (!editing && s === 'Available' ? 'selected' : '')}>${s}</option>`).join('')}</select></div>
+        ${fieldsByType}
+      </div>
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">Extra fields
+        <button class="btn sm" onclick="addAssetField()"><i class="ti ti-plus"></i> Add field</button>
+      </div>
+      <div id="asset-custom-fields">${(S.assetCustom || []).length === 0
+        ? `<p style="color:var(--muted);font-size:12px">Add your own fields (e.g. colour, warranty, IMEI) — they are saved with the asset.</p>`
+        : (S.assetCustom || []).map((f, i) => `<div style="display:flex;gap:8px;margin-bottom:8px">
+            <input id="ascf-k-${i}" value="${String(f.k || '').replace(/"/g, '&quot;')}" placeholder="Field name" style="flex:1"/>
+            <input id="ascf-v-${i}" value="${String(f.v || '').replace(/"/g, '&quot;')}" placeholder="Value" style="flex:1"/>
+            <button class="btn sm" style="color:var(--red)" onclick="rmAssetField(${i})"><i class="ti ti-trash"></i></button>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="openModal(null)">Cancel</button>
+      <button class="btn g" onclick="saveAsset()"><i class="ti ti-check"></i> ${editing ? 'Save changes' : 'Add ' + (type === 'bike' ? 'bike' : type === 'sim' ? 'SIM' : 'asset')}</button>
+    </div>
+  </div></div>`;
+}
+
+async function saveAsset() {
+  const editing = !!S.editingAsset;
+  const type = S.assetTypeDraft || 'bike';
+  const code = gv('as-code').trim();
+  const status = gv('as-status');
+  if (!editing && !code) { alert((type === 'bike' ? 'Bike ID' : type === 'sim' ? 'SIM ID' : 'Asset ID') + ' is required.'); return; }
+  const data = {};
+  (ASSET_KNOWN[type] || []).forEach(k => { const el = document.getElementById('as-' + k); if (el) data[k] = el.value.trim(); });
+  const name = type === 'other' ? gv('as-name').trim() : (gv('as-name') || (editing ? S.editingAsset.name : '') || '');
+  // gather custom fields from the live inputs
+  (S.assetCustom || []).forEach((f, i) => {
+    const k = (document.getElementById('ascf-k-' + i)?.value || '').trim();
+    const val = (document.getElementById('ascf-v-' + i)?.value || '').trim();
+    if (k) data[k] = val;
+  });
+  try {
+    if (editing) {
+      await api('PATCH', '/assets/' + S.editingAsset.id, { name, status, data });
+    } else {
+      await api('POST', '/assets', { type, code, name, status, data });
+    }
+    S.modal = null; S.editingAsset = null; S.assetCustom = [];
+    await loadAssets(true);
+    R();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function deleteAsset(id) {
+  const a = (S.assets || []).find(x => x.id === id);
+  const label = a ? (assetTypeLabel(a.type) + ' ' + a.code) : 'this asset';
+  if (a && a.assignedTo && !confirm(label + ' is currently assigned to ' + (a.holderName || 'an employee') + '. Delete anyway?')) return;
+  if (!(a && a.assignedTo) && !confirm('Delete ' + label + '? This cannot be undone.')) return;
+  try {
+    await api('DELETE', '/assets/' + id);
+    await loadAssets(true);
+    R();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+function openAssignAssetModal(assetId, employeeId) {
+  S.assignAssetDraft = {
+    assetId: assetId || '',
+    employeeId: employeeId || '',
+    assignedDate: new Date().toISOString().slice(0, 10),
+    lockAsset: !!assetId,
+    lockEmp: !!employeeId
+  };
+  openModal('assignAsset');
+}
+
+function renderAssignAssetModal() {
+  const d = S.assignAssetDraft || {};
+  const emps = (S.employees || []).filter(e => e.status !== 'Inactive' || e.id === d.employeeId);
+  const available = (S.assets || []).filter(a => !a.assignedTo && a.status === 'Available');
+  const asset = (S.assets || []).find(a => a.id === d.assetId);
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+    <div class="modal-head"><h3><i class="ti ti-user-plus"></i> Assign asset</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body"><div class="form-grid">
+      <div class="field full"><label>Asset</label>
+        ${d.lockAsset && asset
+          ? `<input value="${assetTypeLabel(asset.type)} ${asset.code}${asset.name ? ' · ' + asset.name : ''}" disabled/>`
+          : `<select id="asg-asset" onchange="S.assignAssetDraft.assetId=this.value">
+              <option value="">— Select an available asset —</option>
+              ${available.map(a => `<option value="${a.id}" ${d.assetId === a.id ? 'selected' : ''}>${assetTypeLabel(a.type)} ${a.code}${a.type === 'bike' && a.plateNo ? ' (' + a.plateNo + ')' : a.type === 'sim' && a.number ? ' (' + a.number + ')' : ''}</option>`).join('')}
+            </select>`}
+      </div>
+      <div class="field full"><label>Employee</label>
+        ${d.lockEmp
+          ? `<input value="${((emps.find(e => e.id === d.employeeId) || {}).name) || ''} (${((emps.find(e => e.id === d.employeeId) || {}).empId) || ''})" disabled/>`
+          : `<select id="asg-emp" onchange="S.assignAssetDraft.employeeId=this.value">
+              <option value="">— Select employee —</option>
+              ${emps.map(e => `<option value="${e.id}" ${d.employeeId === e.id ? 'selected' : ''}>${e.name} (${e.empId})</option>`).join('')}
+            </select>`}
+      </div>
+      <div class="field"><label>Assigned date</label><input id="asg-date" type="date" value="${d.assignedDate || ''}" onchange="S.assignAssetDraft.assignedDate=this.value"/></div>
+    </div>
+    ${(!d.lockAsset && available.length === 0) ? `<div class="alert alert-w" style="margin-top:1rem"><i class="ti ti-info-circle"></i>No available assets to assign. Add one or return an assigned asset first.</div>` : ''}
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Cancel</button>
+      <button class="btn g" onclick="saveAssignAsset()"><i class="ti ti-check"></i> Assign</button></div>
+  </div></div>`;
+}
+
+async function saveAssignAsset() {
+  const d = S.assignAssetDraft || {};
+  if (!d.assetId || !d.employeeId) { alert('Please select both an asset and an employee.'); return; }
+  try {
+    await api('POST', '/assets/' + d.assetId + '/assign', { employeeId: d.employeeId, assignedDate: d.assignedDate || undefined });
+    S.modal = null; S.assignAssetDraft = null;
+    await loadAssets(true);
+    R();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function unassignAsset(id) {
+  const a = (S.assets || []).find(x => x.id === id);
+  const label = a ? (assetTypeLabel(a.type) + ' ' + a.code) : 'this asset';
+  if (!confirm('Mark ' + label + ' as returned / unassigned? It becomes Available again.')) return;
+  try {
+    await api('POST', '/assets/' + id + '/unassign', {});
+    await loadAssets(true);
+    R();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+/* ─── Accommodation exit (records stay history) ────────────── */
+function openAccExit(id) {
+  const a = (S.allocations || []).find(x => x.id === id);
+  S.accExitDraft = { id, checkIn: a ? a.checkIn : '', checkOut: new Date().toISOString().slice(0, 10) };
+  openModal('accExit');
+}
+
+function renderAccExitModal() {
+  const d = S.accExitDraft || {};
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <div class="modal-head"><h3><i class="ti ti-bed-off"></i> Record accommodation exit</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="alert alert-i"><i class="ti ti-info-circle"></i><div>This frees the bed and saves the stay in history (check-in to check-out). It does not change the employee's job status.</div></div>
+      <div class="form-grid">
+        <div class="field"><label>Check-in</label><input value="${d.checkIn ? fmtDate(d.checkIn) : '—'}" disabled/></div>
+        <div class="field"><label>Exit / check-out date</label><input id="acc-exit-date" type="date" value="${d.checkOut || ''}"/></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Cancel</button>
+      <button class="btn g" onclick="saveAccExit()"><i class="ti ti-check"></i> Record exit</button></div>
+  </div></div>`;
+}
+
+async function saveAccExit() {
+  const d = S.accExitDraft || {};
+  const checkOut = gv('acc-exit-date');
+  if (!checkOut) { alert('Please choose the exit date.'); return; }
+  try {
+    await api('POST', '/accommodation/allocations/' + d.id + '/exit', { checkOut });
+    S.modal = null; S.accExitDraft = null;
     await loadAccommodation(true);
+    try { S.accHistory = await api('GET', '/accommodation/history'); } catch (e) {}
     R();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -2988,7 +3454,9 @@ async function init() {
       await loadCfg();
       await loadData();
       if (S.screen === 'employee') {
-        S.viewEmp = await api('GET', '/employees/' + (S.user.empId || ''));
+        const own = await api('GET', '/employees');   // employee role → returns own record only
+        S.employees = own;
+        S.viewEmp = (own && own[0]) || null;
       }
     } catch (e) {
       // Token expired — force re-login
