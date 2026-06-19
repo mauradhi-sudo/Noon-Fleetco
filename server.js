@@ -17,8 +17,10 @@ const JWT_SECRET = process.env.JWT_SECRET || (() => {
   return fs.readFileSync(p, 'utf8');
 })();
 
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const UPLOAD_DIR = path.join(__dirname, 'uploads');            // persistent — kept OUT of the data dir (the data dir is wiped on re-seed)
 const LEAVE_ATTACHMENTS_DIR = path.join(UPLOAD_DIR, 'leaves');
+const LEGACY_UPLOAD_DIR = path.join(DATA_DIR, 'uploads');       // previous location, read as a fallback for older files
+const LEGACY_LEAVE_DIR = path.join(LEGACY_UPLOAD_DIR, 'leaves');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(LEAVE_ATTACHMENTS_DIR, { recursive: true });
 
@@ -48,7 +50,7 @@ const uploadLeaveAttachment = multer({
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(UPLOAD_DIR));
+// NOTE: no public /uploads mount — documents are served only via the authenticated /api/documents/:id/download route
 app.use(express.static(path.join(__dirname, 'public')));
 
 const now = () => new Date().toISOString();
@@ -128,7 +130,7 @@ app.post('/api/leaves/:id/attachments', auth, uploadLeaveAttachment.single('file
 
 app.get('/api/leaves/:id/attachments', auth, async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); res.json(lv.attachments || []); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/leaves/:id/attachments/:filename/download', async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); const att = (lv.attachments || []).find(a => a.filename === req.params.filename); if (!att) return res.status(404).json({ error: 'Attachment not found' }); const filepath = path.join(LEAVE_ATTACHMENTS_DIR, att.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, att.name || att.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/leaves/:id/attachments/:filename/download', async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); const att = (lv.attachments || []).find(a => a.filename === req.params.filename); if (!att) return res.status(404).json({ error: 'Attachment not found' }); let filepath = path.join(LEAVE_ATTACHMENTS_DIR, att.filename); if (!fs.existsSync(filepath)) filepath = path.join(LEGACY_LEAVE_DIR, att.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, att.name || att.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/leaves/export', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });  const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); const leaves = r.rows.map(rowToLeave).map(l => ({ 'Employee ID': l.empId || '', 'Employee Name': l.empName || '', 'Type': l.type || '', 'From Date': l.fromDate || '', 'To Date': l.toDate || '', 'Days': l.days || 0, 'Status': l.status || '', 'Applied On': l.appliedOn || '', 'Decided By': l.decidedBy || '', 'Decided At': l.decidedAt || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(leaves); XLSX.utils.book_append_sheet(wb, ws, 'Leaves'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="leaves_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -142,7 +144,7 @@ app.get('/api/documents', auth, async (req, res) => { try { if (req.user.role ==
 
 app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); if (req.user.role !== 'employee' && !hasPermission(req, 'upload_documents')) return res.status(403).json({ error: 'No permission' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const id = uid('D'); await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, req.file.filename, today(), req.user.name]); res.json({ id, filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/documents/:id/download', async (req, res) => { try { const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; const filepath = path.join(UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, d.name || d.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/documents/:id/download', auth, async (req, res) => { try { const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; const owner = d.employeeid ?? d.employeeId; if (req.user.role === 'employee' && owner !== req.user.employeeId) return res.status(403).json({ error: 'No permission' }); let filepath = path.join(UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) filepath = path.join(LEGACY_UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, d.name || d.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/notifications', auth, async (req, res) => { try { const id = req.user.role === 'employee' ? req.user.employeeId : '__none__'; const r = await query('SELECT * FROM notifications WHERE employeeId = ? ORDER BY id DESC', [id]); res.json(r.rows.map(rowToNotif)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
