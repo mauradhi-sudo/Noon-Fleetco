@@ -102,19 +102,21 @@ app.post('/api/auth/employee/verify-otp', async (req, res) => { try { const empI
 
 app.get('/api/employees', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM employees WHERE id = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToEmp)); } const r = await query('SELECT * FROM employees ORDER BY empId', []); res.json(r.rows.map(rowToEmp)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
+app.get('/api/employees/export', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });  const r = await query('SELECT * FROM employees ORDER BY empId', []); const emps = r.rows.map(rowToEmp).map(e => ({ 'Employee ID': e.empId || '', 'Name': e.name || '', 'Email': e.email || '', 'Passport': e.passportNo || '', 'Status': e.status || 'Active', 'Position': e.position || '', 'Department': e.department || '', 'Location': e.location || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(emps); XLSX.utils.book_append_sheet(wb, ws, 'Employees'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="employees_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
+
 app.get('/api/employees/:id', auth, async (req, res) => { try { if (req.user.role === 'employee' && req.params.id !== req.user.employeeId) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); res.json(rowToEmp(r.rows[0])); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/employees', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const id = uid('E'); const emp = req.body; await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, emp.empId, emp.passportNo, emp.name, emp.email, emp.status || 'Active', JSON.stringify(emp)]); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/employees', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'add_employees')) return res.status(403).json({ error: 'No permission' }); const id = uid('E'); const emp = req.body; await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, emp.empId, emp.passportNo, emp.name, emp.email, emp.status || 'Active', JSON.stringify(emp)]); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.patch('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.patch('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'edit_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.put('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.put('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'edit_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); Object.assign(e, req.body); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE id = ?', [e.name, e.email, e.status, e.passportNo, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.patch('/api/employees/:id/status', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); e.status = req.body.status; await query('UPDATE employees SET status = ?, data = ? WHERE id = ?', [req.body.status, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.patch('/api/employees/:id/status', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'edit_employees')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); e.status = req.body.status; await query('UPDATE employees SET status = ?, data = ? WHERE id = ?', [req.body.status, JSON.stringify(e), e.id]); res.json({ message: 'Updated' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); await query('DELETE FROM employees WHERE id = ?', [req.params.id]); await query('DELETE FROM leaves WHERE employeeId = ?', [e.id]); await query('DELETE FROM payslips WHERE employeeId = ?', [e.id]); await query('DELETE FROM documents WHERE employeeId = ?', [e.id]); await query('DELETE FROM bed_allocations WHERE employeeId = ?', [e.id]); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'delete_employees')) return res.status(403).json({ error: 'Super admin only' }); const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const e = rowToEmp(r.rows[0]); await query('DELETE FROM employees WHERE id = ?', [req.params.id]); await query('DELETE FROM leaves WHERE employeeId = ?', [e.id]); await query('DELETE FROM payslips WHERE employeeId = ?', [e.id]); await query('DELETE FROM documents WHERE employeeId = ?', [e.id]); await query('DELETE FROM bed_allocations WHERE employeeId = ?', [e.id]); res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_employees')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; let added = 0, updated = 0; for (const row of rows) { const existing = await query('SELECT id FROM employees WHERE empId = ?', [row.empId]); if (existing.rows.length) { const e = rowToEmp(await query('SELECT * FROM employees WHERE empId = ?', [row.empId])); Object.assign(e, row); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE empId = ?', [e.name, e.email, e.status || 'Active', e.passportNo, JSON.stringify(e), row.empId]); updated++; } else { const id = uid('E'); await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, row.empId, row.passportNo, row.name, row.email, row.status || 'Active', JSON.stringify(row)]); added++; } } await audit(req.user.name, `Bulk import: +${added}, ~${updated}`); res.json({ message: 'Imported', added, updated, total: added + updated }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'import_employees')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; let added = 0, updated = 0; for (const row of rows) { const existing = await query('SELECT id FROM employees WHERE empId = ?', [row.empId]); if (existing.rows.length) { const e = rowToEmp(await query('SELECT * FROM employees WHERE empId = ?', [row.empId])); Object.assign(e, row); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE empId = ?', [e.name, e.email, e.status || 'Active', e.passportNo, JSON.stringify(e), row.empId]); updated++; } else { const id = uid('E'); await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, row.empId, row.passportNo, row.name, row.email, row.status || 'Active', JSON.stringify(row)]); added++; } } await audit(req.user.name, `Bulk import: +${added}, ~${updated}`); res.json({ message: 'Imported', added, updated, total: added + updated }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/leaves', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM leaves WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToLeave)); } const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); res.json(r.rows.map(rowToLeave)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -128,11 +130,9 @@ app.get('/api/leaves/:id/attachments', auth, async (req, res) => { try { const r
 
 app.get('/api/leaves/:id/attachments/:filename/download', async (req, res) => { try { const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); const att = (lv.attachments || []).find(a => a.filename === req.params.filename); if (!att) return res.status(404).json({ error: 'Attachment not found' }); const filepath = path.join(LEAVE_ATTACHMENTS_DIR, att.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, att.name || att.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/leaves/export', async (req, res) => { try { const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); const leaves = r.rows.map(rowToLeave).map(l => ({ 'Employee ID': l.empId || '', 'Employee Name': l.empName || '', 'Type': l.type || '', 'From Date': l.fromDate || '', 'To Date': l.toDate || '', 'Days': l.days || 0, 'Status': l.status || '', 'Applied On': l.appliedOn || '', 'Decided By': l.decidedBy || '', 'Decided At': l.decidedAt || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(leaves); XLSX.utils.book_append_sheet(wb, ws, 'Leaves'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="leaves_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/leaves/export', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });  const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); const leaves = r.rows.map(rowToLeave).map(l => ({ 'Employee ID': l.empId || '', 'Employee Name': l.empName || '', 'Type': l.type || '', 'From Date': l.fromDate || '', 'To Date': l.toDate || '', 'Days': l.days || 0, 'Status': l.status || '', 'Applied On': l.appliedOn || '', 'Decided By': l.decidedBy || '', 'Decided At': l.decidedAt || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(leaves); XLSX.utils.book_append_sheet(wb, ws, 'Leaves'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="leaves_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/employees/export', async (req, res) => { try { const r = await query('SELECT * FROM employees ORDER BY empId', []); const emps = r.rows.map(rowToEmp).map(e => ({ 'Employee ID': e.empId || '', 'Name': e.name || '', 'Email': e.email || '', 'Passport': e.passportNo || '', 'Status': e.status || 'Active', 'Position': e.position || '', 'Department': e.department || '', 'Location': e.location || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(emps); XLSX.utils.book_append_sheet(wb, ws, 'Employees'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="employees_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
-
-app.get('/api/payslips/export', async (req, res) => { try { const r = await query('SELECT * FROM payslips ORDER BY month DESC', []); const ps = r.rows.map(rowToPs).map(p => ({ 'Employee ID': p.employeeId || '', 'Month': p.month || '', 'Basic': p.basic || 0, 'Allowances': p.allowances || 0, 'Deductions': p.deductions || 0, 'Net Pay': p.netPay || p.net_pay || 0 })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(ps); XLSX.utils.book_append_sheet(wb, ws, 'Payslips'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="payslips_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/payslips/export', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });  const r = await query('SELECT * FROM payslips ORDER BY month DESC', []); const ps = r.rows.map(rowToPs).map(p => ({ 'Employee ID': p.employeeId || '', 'Month': p.month || '', 'Basic': p.basic || 0, 'Allowances': p.allowances || 0, 'Deductions': p.deductions || 0, 'Net Pay': p.netPay || p.net_pay || 0 })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(ps); XLSX.utils.book_append_sheet(wb, ws, 'Payslips'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="payslips_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/payslips', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM payslips WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToPs)); } const r = await query('SELECT * FROM payslips ORDER BY month DESC', []); res.json(r.rows.map(rowToPs)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -140,7 +140,7 @@ app.post('/api/payslips/bulk', auth, async (req, res) => { try { if (!isSuperAdm
 
 app.get('/api/documents', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM documents WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } const r = await query('SELECT * FROM documents ORDER BY uploadedAt DESC', []); res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const id = uid('D'); await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, req.file.filename, today(), req.user.name]); res.json({ id, filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); if (req.user.role !== 'employee' && !hasPermission(req, 'upload_documents')) return res.status(403).json({ error: 'No permission' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const id = uid('D'); await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, req.file.filename, today(), req.user.name]); res.json({ id, filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/documents/:id/download', async (req, res) => { try { const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; const filepath = path.join(UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, d.name || d.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -158,6 +158,71 @@ app.get('/api/config', auth, async (req, res) => { try { const r = await query('
 
 app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
+/* ─── Reports (Excel exports) ─────────────────────────────── */
+function sendXlsx(res, name, sheets) {
+  const wb = XLSX.utils.book_new();
+  for (const [sheetName, rows] of sheets) {
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  }
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}_${today()}.xlsx"`);
+  res.send(buf);
+}
+
+app.get('/api/reports/accommodation', auth, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });
+    const camps = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
+    const rooms = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
+    const emps  = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const allocs = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc).map(a => enrichAlloc(a, camps, rooms, emps));
+    const hist = (await query('SELECT * FROM acc_history', [])).rows.map(h => {
+      const eid = h.employeeid ?? h.employeeId, cid = h.campid ?? h.campId, rid = h.roomid ?? h.roomId;
+      const c = camps.find(x => x.id === cid) || {}, rm = rooms.find(x => x.id === rid) || {}, e = emps.find(x => x.id === eid) || {};
+      return { 'Employee ID': e.empId || '', 'Name': e.name || '', 'Camp': c.name || '', 'Room': rm.roomNo || '', 'Bed': h.bed ?? '', 'Check-in': h.checkin ?? h.checkIn ?? '', 'Check-out': h.checkout ?? h.checkOut ?? '' };
+    });
+    const current = allocs.map(a => ({ 'Employee ID': a.empCode || '', 'Name': a.empName || '', 'Camp': a.campName || '', 'Room': a.roomNo || '', 'Bed': a.bed || '', 'Check-in': a.checkIn || '' }));
+    const occupancy = camps.map(c => { const cr = rooms.filter(r => r.campId === c.id); const cap = cr.reduce((s, r) => s + (r.capacity || 0), 0); const occ = allocs.filter(a => a.campId === c.id).length; return { 'Camp': c.name, 'Rooms': cr.length, 'Capacity': cap, 'Occupied': occ, 'Vacant': Math.max(0, cap - occ) }; });
+    sendXlsx(res, 'accommodation_report', [['Current occupants', current], ['Camp occupancy', occupancy], ['Stay history', hist]]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/reports/assets', auth, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports') && !hasPermission(req, 'view_assets') && !hasPermission(req, 'assign_assets') && !hasPermission(req, 'manage_assets')) return res.status(403).json({ error: 'No permission' });
+    const emps = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset).map(a => enrichAsset(a, emps));
+    const row = a => ({ 'Type': a.type, 'Asset ID': a.code, 'Name': a.name || '', 'Plate / Number': a.plateNo || a.number || '', 'Brand': a.brand || '', 'Model': a.model || '', 'Provider': a.provider || '', 'Reg. expiry': a.registrationExpiry || '', 'Ins. expiry': a.insuranceExpiry || '', 'Status': a.status, 'Holder ID': a.holderCode || '', 'Holder': a.holderName || '', 'Assigned on': a.assignedDate || '' });
+    sendXlsx(res, 'asset_register', [
+      ['Bikes', assets.filter(a => a.type === 'bike').map(row)],
+      ['SIM cards', assets.filter(a => a.type === 'sim').map(row)],
+      ['Other assets', assets.filter(a => a.type === 'other').map(row)],
+    ]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/reports/expiring', auth, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });
+    const emps = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset).map(a => enrichAsset(a, emps));
+    const visas = emps.filter(e => { const n = daysUntil(e.evisaExpiry); return n != null && n <= 90; })
+      .sort((a, b) => daysUntil(a.evisaExpiry) - daysUntil(b.evisaExpiry))
+      .map(e => ({ 'Employee ID': e.empId, 'Name': e.name, 'Passport': e.passportNo || '', 'Visa expiry': e.evisaExpiry || '', 'Days left': daysUntil(e.evisaExpiry) }));
+    const veh = [];
+    assets.filter(a => a.type === 'bike').forEach(b => {
+      ['registrationExpiry', 'insuranceExpiry'].forEach(field => {
+        const n = daysUntil(b[field]);
+        if (n != null && n <= 30) veh.push({ 'Asset ID': b.code, 'Plate': b.plateNo || '', 'Document': field === 'registrationExpiry' ? 'Registration' : 'Insurance', 'Expiry': b[field], 'Days left': n, 'Holder': b.holderName || 'Unassigned' });
+      });
+    });
+    veh.sort((a, b) => a['Days left'] - b['Days left']);
+    sendXlsx(res, 'expiring_documents', [['Visas (90 days)', visas], ['Vehicle docs (30 days)', veh]]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/dashboard/metrics', auth, async (req, res) => { try { const emps = await query('SELECT * FROM employees ORDER BY empId', []); const leaves = await query('SELECT * FROM leaves WHERE status = ?', ['Pending']); const payslips = await query('SELECT * FROM payslips', []); const empList = emps.rows.map(rowToEmp); const activeAndWorking = empList.filter(e => e.status === 'Active'); const onLeave = empList.filter(e => e.status === 'On Leave'); const inactive = empList.filter(e => e.status === 'Inactive'); let totalNetPay = 0; payslips.rows.forEach(p => { const data = J(p.data, {}); totalNetPay += +(data.netPay || data.net_pay || 0); }); res.json({ totalEmployees: empList.length, pendingLeaves: leaves.rows.length, payslipsIssued: totalNetPay, details: { activeAndWorking: activeAndWorking.map(e => ({ id: e.id, empId: e.empId, name: e.name })), onLeave: onLeave.map(e => ({ id: e.id, empId: e.empId, name: e.name })), inactive: inactive.map(e => ({ id: e.id, empId: e.empId, name: e.name })) } }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 /* ─── Accommodation ─────────────────────────────────────────────────────────
@@ -166,6 +231,7 @@ app.get('/api/dashboard/metrics', auth, async (req, res) => { try { const emps =
    same way as the rest of the system: an employee can only ever see their own
    allocation, regardless of what the browser requests. */
 function canManageAcc(req) { return isSuperAdmin(req) || hasPermission(req, 'manage_accommodation'); }
+function canAssignBeds(req) { return canManageAcc(req) || hasPermission(req, 'assign_beds'); }
 function enrichAlloc(a, camps, rooms, emps) {
   const camp = camps.find(c => c.id === a.campId) || {};
   const room = rooms.find(r => r.id === a.roomId) || {};
@@ -296,7 +362,7 @@ app.get('/api/accommodation/allocations', auth, async (req, res) => {
 
 app.post('/api/accommodation/allocations', auth, async (req, res) => {
   try {
-    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    if (!canAssignBeds(req)) return res.status(403).json({ error: 'No permission' });
     const { employeeId, campId, roomId } = req.body;
     const bed = String(req.body.bed || '').trim();
     const checkIn = req.body.checkIn || today();
@@ -329,7 +395,7 @@ app.post('/api/accommodation/allocations', auth, async (req, res) => {
 
 app.delete('/api/accommodation/allocations/:id', auth, async (req, res) => {
   try {
-    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    if (!canAssignBeds(req)) return res.status(403).json({ error: 'No permission' });
     await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
     await audit(req.user.name, 'Bed vacated');
     res.json({ message: 'Vacated' });
@@ -339,7 +405,7 @@ app.delete('/api/accommodation/allocations/:id', auth, async (req, res) => {
 // Record an accommodation exit: archive the stay (check-in -> check-out) then free the bed.
 app.post('/api/accommodation/allocations/:id/exit', auth, async (req, res) => {
   try {
-    if (!canManageAcc(req)) return res.status(403).json({ error: 'No permission' });
+    if (!canAssignBeds(req)) return res.status(403).json({ error: 'No permission' });
     const r = await query('SELECT * FROM bed_allocations WHERE id = ?', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Allocation not found' });
     const a = rowToAlloc(r.rows[0]);
@@ -378,6 +444,8 @@ app.get('/api/accommodation/history', auth, async (req, res) => {
 
 /* ─── Fleet Assets: bikes, SIM cards, and custom assets ───── */
 function canManageAssets(req) { return isSuperAdmin(req) || hasPermission(req, 'manage_assets'); }
+function canAssignAssets(req) { return canManageAssets(req) || hasPermission(req, 'assign_assets'); }
+function canImportAssets(req) { return canManageAssets(req) || hasPermission(req, 'import_assets'); }
 
 // days until a YYYY-MM-DD date (negative = already expired); null if no date
 function daysUntil(d) {
@@ -469,16 +537,17 @@ app.post('/api/assets', auth, async (req, res) => {
 
 app.patch('/api/assets/:id', auth, async (req, res) => {
   try {
-    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const isMgr = canManageAssets(req);
+    if (!isMgr && !canAssignAssets(req)) return res.status(403).json({ error: 'No permission' });
     const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     const cur = rowToAsset(r.rows[0]);
-    const code = req.body.code != null ? String(req.body.code).trim() : cur.code;
-    const name = req.body.name != null ? String(req.body.name).trim() : cur.name;
+    // assign-only admins may change status, but not master fields (code/name/extra data)
+    const code = (isMgr && req.body.code != null) ? String(req.body.code).trim() : cur.code;
+    const name = (isMgr && req.body.name != null) ? String(req.body.name).trim() : cur.name;
     const status = req.body.status != null ? String(req.body.status).trim() : cur.status;
-    // merge custom/structured fields into data (preserve assignment + createdAt)
     const base = J(r.rows[0].data, {});
-    const incoming = (req.body.data && typeof req.body.data === 'object') ? req.body.data : {};
+    const incoming = (isMgr && req.body.data && typeof req.body.data === 'object') ? req.body.data : {};
     const data = Object.assign({}, base, incoming);
     await query('UPDATE assets SET code = ?, name = ?, status = ?, data = ? WHERE id = ?',
       [code, name, status, JSON.stringify(data), req.params.id]);
@@ -489,7 +558,7 @@ app.patch('/api/assets/:id', auth, async (req, res) => {
 
 app.post('/api/assets/:id/assign', auth, async (req, res) => {
   try {
-    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    if (!canAssignAssets(req)) return res.status(403).json({ error: 'No permission' });
     const employeeId = req.body.employeeId;
     if (!employeeId) return res.status(400).json({ error: 'Employee is required' });
     const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
@@ -508,7 +577,7 @@ app.post('/api/assets/:id/assign', auth, async (req, res) => {
 
 app.post('/api/assets/:id/unassign', auth, async (req, res) => {
   try {
-    if (!canManageAssets(req)) return res.status(403).json({ error: 'No permission' });
+    if (!canAssignAssets(req)) return res.status(403).json({ error: 'No permission' });
     const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     const status = String(req.body.status || 'Available').trim() || 'Available';
@@ -526,6 +595,52 @@ app.delete('/api/assets/:id', auth, async (req, res) => {
     await query('DELETE FROM assets WHERE id = ?', [req.params.id]);
     await audit(req.user.name, 'Asset deleted');
     res.json({ message: 'Deleted' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Bulk import bikes / SIMs / other assets from a spreadsheet (mass create + update).
+app.post('/api/assets/bulk/import', auth, async (req, res) => {
+  try {
+    if (!canImportAssets(req)) return res.status(403).json({ error: 'No permission' });
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    const KNOWN = { bike: ['plateNo', 'chassisNo', 'engineNo', 'brand', 'model', 'registrationExpiry', 'insuranceExpiry'], sim: ['number', 'provider', 'puk', 'remarks'], other: [] };
+    const empRows = (await query('SELECT id, empId FROM employees', [])).rows;
+    const empMap = {}; empRows.forEach(e => { const eid = e.empid ?? e.empId; if (eid) empMap[String(eid).trim().toUpperCase()] = e.id; });
+    const cleanDate = v => (/^\d{4}-\d{1,2}-\d{1,2}/.test(String(v || '')) ? String(v).slice(0, 10) : '');
+    let added = 0, updated = 0, skipped = 0; const errors = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || {};
+      const type = ['bike', 'sim', 'other'].includes(row.type) ? row.type : 'other';
+      const code = String(row.code || '').trim();
+      if (!code) { skipped++; if (errors.length < 50) errors.push(`Row ${i + 1}: missing asset ID — skipped`); continue; }
+      const name = String(row.name || '').trim();
+      let statusIn = String(row.status || '').trim();
+      const data = {};
+      KNOWN[type].forEach(k => { if (row[k] != null && String(row[k]).trim() !== '') data[k] = String(row[k]).trim(); });
+      // optional assignment to an employee (by Employee ID, e.g. SN0002)
+      let assignedTo, assignedDate;
+      const assignRaw = String(row.assignTo || '').trim();
+      if (assignRaw) {
+        const aid = empMap[assignRaw.toUpperCase()];
+        if (aid) { assignedTo = aid; assignedDate = cleanDate(row.assignedDate) || today(); statusIn = 'Assigned'; }
+        else if (errors.length < 50) errors.push(`Row ${i + 1} (${code}): employee "${assignRaw}" not found — imported but left unassigned`);
+      }
+      const existing = await query('SELECT * FROM assets WHERE type = ? AND LOWER(code) = ?', [type, code.toLowerCase()]);
+      if (existing.rows.length) {
+        const cur = rowToAsset(existing.rows[0]);
+        const merged = Object.assign(J(existing.rows[0].data, {}), data);
+        const newAssignedTo   = assignedTo !== undefined ? assignedTo : cur.assignedTo;
+        const newAssignedDate = assignedTo !== undefined ? assignedDate : cur.assignedDate;
+        await query('UPDATE assets SET name = ?, status = ?, assignedTo = ?, assignedDate = ?, data = ? WHERE id = ?', [name || cur.name, statusIn || cur.status, newAssignedTo ?? null, newAssignedDate ?? null, JSON.stringify(merged), cur.id]);
+        updated++;
+      } else {
+        data.createdAt = today();
+        await query('INSERT INTO assets (id, type, code, name, status, assignedTo, assignedDate, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [uid('AS'), type, code, name, statusIn || 'Available', assignedTo ?? null, assignedDate ?? null, JSON.stringify(data)]);
+        added++;
+      }
+    }
+    await audit(req.user.name, `Asset bulk import: +${added}, ~${updated}, skipped ${skipped}`);
+    res.json({ added, updated, skipped, total: added + updated, errors });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
