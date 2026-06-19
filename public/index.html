@@ -918,6 +918,25 @@ async function downloadReport(path, filename) {
   } catch (e) { alert('Could not download: ' + e.message); }
 }
 
+// Open/download a document via the authenticated API (browser links can't carry
+// the bearer token, so fetch → blob → open in a new tab, with a download fallback).
+async function viewDoc(id) {
+  try {
+    const res = await fetch(API + '/api/documents/' + id + '/download', { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!res.ok) { let m = 'Could not open this file'; try { m = (await res.json()).error || m; } catch (e) {} throw new Error(m); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if (!w) {
+      const doc = (S.documents || []).find(x => x.id === id);
+      const a = document.createElement('a');
+      a.href = url; a.download = (doc && doc.name) || 'document';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { alert(e.message); }
+}
+
 function exportLeavesData() {
   downloadReport('/leaves/export', 'leaves_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
@@ -1344,7 +1363,7 @@ function renderDocsPage() {
             <b style="font-size:13px;display:block">${d.name}</b>
             <span style="font-size:11px;color:var(--muted)">${d.empName||''} · ${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)}</span>
           </div>
-          <a class="btn sm" href="/uploads/${d.filename}" target="_blank"><i class="ti ti-download"></i></a>
+          <button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>
         </div>`).join('')}
     </div>
   </div>`;
@@ -1527,7 +1546,7 @@ function renderDocumentsTab(docs, empId, isAdmin) {
             <span style="font-size:11px;color:var(--muted)">${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)} · ${d.uploader}</span>
           </div>
           <div style="display:flex;gap:4px">
-            ${d.filename ? `<a class="btn sm" href="/uploads/${d.filename}" target="_blank"><i class="ti ti-download"></i></a>` : ''}
+            ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
             ${isAdmin ? `<button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
           </div>
         </div>`).join('')}
@@ -1832,7 +1851,7 @@ function renderEmpDocsTab(docs) {
             <b style="display:block;font-size:13px">${d.name}</b>
             <span style="font-size:11px;color:var(--muted)">${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)}</span>
           </div>
-          ${d.filename ? `<a class="btn sm" href="/uploads/${d.filename}" target="_blank"><i class="ti ti-download"></i></a>` : ''}
+          ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
         </div>`).join('')}
     </div>
   </div>`;
@@ -1955,35 +1974,59 @@ function renderAddEmpModal() {
  
 function renderEditEmpModal() {
   const e = S.viewEmp; if (!e) return '';
+  const sel = (cur, opt) => (cur || '') === opt ? 'selected' : '';
   return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
     <div class="modal-head"><h3>Edit — ${e.name}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
-    <div class="modal-body"><div class="form-grid">
-      <div class="field full"><label>Full name</label><input id="en" value="${e.name||''}"/></div>
-      <div class="field"><label>Passport number</label><input id="ep" value="${e.passportNo||''}"/></div>
-      <div class="field"><label>Nationality</label><input id="enat" value="${e.nationality||''}"/></div>
-      <div class="field"><label>Contact</label><input id="ec" value="${e.contact||''}"/></div>
-      <div class="field full"><label>Email</label><input id="ee" value="${e.email||''}"/></div>
-      <div class="field"><label>Position</label><input id="epos" value="${e.position||''}"/></div>
-      <div class="field"><label>Location</label><input id="eloc" value="${e.location||''}"/></div>
-      <div class="field"><label>Visa status</label><input id="evis" value="${e.visaStatus||''}"/></div>
-      <div class="field"><label>E-visa expiry</label><input id="eexp" type="date" value="${e.evisaExpiry||''}"/></div>
-      <div class="field"><label>EID number</label><input id="eeid" value="${e.eidNo||''}"/></div>
-      <div class="field"><label>Status</label><select id="estat">
-        <option ${e.status==='Active'?'selected':''}>Active</option>
-        <option ${e.status==='Inactive'?'selected':''}>Inactive</option>
-      </select></div>
-      <div class="field"><label>Basic (AED)</label><input id="esb" type="number" value="${e.basicSalary||0}"/></div>
-      <div class="field"><label>Housing (AED)</label><input id="esh" type="number" value="${e.housingSalary||0}"/></div>
-      <div class="field"><label>Transport (AED)</label><input id="est" type="number" value="${e.transportSalary||0}"/></div>
-      <div class="field"><label>Food (AED)</label><input id="esf" type="number" value="${e.foodSalary||0}"/></div>
-      <div class="field"><label>Rider ID</label><input id="erid" value="${e.riderId||''}"/></div>
-      <div class="field"><label>Deployment date</label><input id="edep" type="date" value="${e.deploymentDate||''}"/></div>
-      <div class="field"><label>Medical date</label><input id="emed" type="date" value="${e.medicalDate||''}"/></div>
-      <div class="field"><label>Biometric date</label><input id="ebio" type="date" value="${e.biometricDate||''}"/></div>
-      <div class="field"><label>Bank name</label><input id="ebank" value="${e.bankName||''}"/></div>
-      <div class="field"><label>IBAN</label><input id="eiban" value="${e.iban||''}"/></div>
-      ${(CFG.empFields || []).map(f => `<div class="field"><label>${f.label}</label><input id="ecf_${f.key}" value="${e['cf_' + f.key] || ''}"/></div>`).join('')}
-    </div></div>
+    <div class="modal-body">
+      <div class="section-label">Personal</div>
+      <div class="form-grid">
+        <div class="field"><label>Employee ID (cannot be changed)</label><input value="${e.empId || ''}" disabled style="background:#f1f0ec;color:var(--muted)"/></div>
+        <div class="field"><label>Status</label><select id="estat"><option ${sel(e.status, 'Active')}>Active</option><option ${sel(e.status, 'Inactive')}>Inactive</option></select></div>
+        <div class="field full"><label>Full name</label><input id="en" value="${e.name || ''}"/></div>
+        <div class="field"><label>First name</label><input id="ef" value="${e.firstName || ''}"/></div>
+        <div class="field"><label>Last name</label><input id="el" value="${e.lastName || ''}"/></div>
+        <div class="field"><label>Gender</label><select id="eg"><option value="" ${sel(e.gender, '')}>—</option><option ${sel(e.gender, 'Male')}>Male</option><option ${sel(e.gender, 'Female')}>Female</option></select></div>
+        <div class="field"><label>Nationality</label><input id="enat" value="${e.nationality || ''}"/></div>
+        <div class="field"><label>Contact</label><input id="ec" value="${e.contact || ''}"/></div>
+        <div class="field full"><label>Email</label><input id="ee" value="${e.email || ''}"/></div>
+      </div>
+      <div class="section-label">Employment</div>
+      <div class="form-grid">
+        <div class="field"><label>Position</label><input id="epos" value="${e.position || ''}"/></div>
+        <div class="field"><label>Collar type</label><select id="ecol"><option value="" ${sel(e.collar, '')}>—</option><option ${sel(e.collar, 'Blue collar')}>Blue collar</option><option ${sel(e.collar, 'White collar')}>White collar</option></select></div>
+        <div class="field"><label>Department</label><input id="edept" value="${e.department || ''}"/></div>
+        <div class="field"><label>Location</label><input id="eloc" value="${e.location || ''}"/></div>
+        <div class="field"><label>Joining date</label><input id="ejd" type="date" value="${e.joiningDate || ''}"/></div>
+        <div class="field"><label>Line manager</label><input id="elm" value="${e.lineManager || ''}"/></div>
+        <div class="field"><label>Agency</label><input id="eag" value="${e.agencyName || ''}"/></div>
+        <div class="field"><label>Rider ID</label><input id="erid" value="${e.riderId || ''}"/></div>
+        <div class="field"><label>Deployment date</label><input id="edep" type="date" value="${e.deploymentDate || ''}"/></div>
+        <div class="field"><label>Medical date</label><input id="emed" type="date" value="${e.medicalDate || ''}"/></div>
+        <div class="field"><label>Biometric date</label><input id="ebio" type="date" value="${e.biometricDate || ''}"/></div>
+      </div>
+      <div class="section-label">Visa &amp; documents</div>
+      <div class="form-grid">
+        <div class="field"><label>Passport number</label><input id="ep" value="${e.passportNo || ''}"/></div>
+        <div class="field"><label>Visa status</label><input id="evis" value="${e.visaStatus || ''}"/></div>
+        <div class="field"><label>E-visa expiry</label><input id="eexp" type="date" value="${e.evisaExpiry || ''}"/></div>
+        <div class="field"><label>EID number</label><input id="eeid" value="${e.eidNo || ''}"/></div>
+      </div>
+      <div class="section-label">Bank</div>
+      <div class="form-grid">
+        <div class="field"><label>Bank name</label><input id="ebank" value="${e.bankName || ''}"/></div>
+        <div class="field"><label>IBAN</label><input id="eiban" value="${e.iban || ''}"/></div>
+      </div>
+      <div class="section-label">Salary (AED)</div>
+      <div class="form-grid">
+        <div class="field"><label>Basic</label><input id="esb" type="number" value="${e.basicSalary || 0}"/></div>
+        <div class="field"><label>Housing</label><input id="esh" type="number" value="${e.housingSalary || 0}"/></div>
+        <div class="field"><label>Transport</label><input id="est" type="number" value="${e.transportSalary || 0}"/></div>
+        <div class="field"><label>Food</label><input id="esf" type="number" value="${e.foodSalary || 0}"/></div>
+      </div>
+      ${(CFG.empFields || []).length ? `<div class="section-label">Additional fields</div><div class="form-grid">
+        ${(CFG.empFields || []).map(f => `<div class="field"><label>${f.label}</label><input id="ecf_${f.key}" value="${e['cf_' + f.key] || ''}"/></div>`).join('')}
+      </div>` : ''}
+    </div>
     <div class="modal-foot">
       <button class="btn" onclick="openModal(null)">Cancel</button>
       <button class="btn g" onclick="saveEditEmp()">Save changes</button>
@@ -2131,9 +2174,12 @@ async function saveNewEmp() {
 async function saveEditEmp() {
   try {
     await api('PUT', `/employees/${S.viewEmp.id}`, {
-      name: gv('en'), passportNo: gv('ep'), nationality: gv('enat'),
+      name: gv('en'), firstName: gv('ef'), lastName: gv('el'), gender: gv('eg'),
+      passportNo: gv('ep'), nationality: gv('enat'),
       contact: gv('ec'), email: gv('ee'),
-      position: gv('epos'), location: gv('eloc'), visaStatus: gv('evis'), evisaExpiry: gv('eexp'),
+      position: gv('epos'), collar: gv('ecol'), department: gv('edept'), location: gv('eloc'),
+      joiningDate: gv('ejd'), lineManager: gv('elm'), agencyName: gv('eag'),
+      visaStatus: gv('evis'), evisaExpiry: gv('eexp'),
       eidNo: gv('eeid'), status: gv('estat'),
       riderId: gv('erid'), deploymentDate: gv('edep'), medicalDate: gv('emed'), biometricDate: gv('ebio'),
       bankName: gv('ebank'), iban: gv('eiban'),
