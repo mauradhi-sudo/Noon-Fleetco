@@ -69,7 +69,24 @@ const rowToAlloc = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r
 const rowToAsset = (r) => Object.assign(J(r.data, {}), { id: r.id, type: r.type || 'other', code: r.code || '', name: r.name || '', status: r.status || 'Available', assignedTo: r.assignedto ?? r.assignedTo ?? null, assignedDate: r.assigneddate ?? r.assignedDate ?? null });
 
 async function audit(user, action) { try { await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]); } catch (e) { } }
-async function notify(employeeId, type, title, message) { try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) { } }
+async function notify(employeeId, type, title, message) {
+  try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) {}
+  // also email the employee (best-effort, never blocks the request)
+  try { const r = await query('SELECT * FROM employees WHERE id = ?', [employeeId]); if (r.rows.length) { const e = rowToEmp(r.rows[0]); if (e.email) mailer.sendNotice(e.email, `Noon Fleet HRMS \u2014 ${title}`, `Hi ${e.name || ''},\n\n${message}\n\n\u2014 Noon Fleet HRMS`).catch(() => {}); } } catch (e) {}
+}
+// Email every admin who can act on this kind of event (super admins are always included).
+async function notifyAdmins(subject, text, permission) {
+  const perms = Array.isArray(permission) ? permission : (permission ? [permission] : []);
+  try {
+    const r = await query('SELECT * FROM admins', []);
+    for (const row of r.rows) {
+      if (!row.email) continue;
+      const isSuper = !!(row.isSuperAdmin ?? row.issuperadmin);
+      let up = []; try { up = JSON.parse(row.permissions || '[]'); } catch (e) {}
+      if (isSuper || !perms.length || perms.some(p => up.includes(p))) mailer.sendNotice(row.email, subject, text).catch(() => {});
+    }
+  } catch (e) {}
+}
 
 function token(payload) { return jwt.sign(payload, JWT_SECRET, { expiresIn: '12h' }); }
 function auth(req, res, next) {
@@ -122,9 +139,9 @@ app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!is
 
 app.get('/api/leaves', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM leaves WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToLeave)); } const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); res.json(r.rows.map(rowToLeave)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today() }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave submitted', 'Pending approval'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today() }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave request submitted', `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)) has been submitted and is awaiting approval. You will be notified once it is reviewed.`); await notifyAdmins(`New leave request \u2014 ${e.name}`, `${e.name} (${e.empId}) has requested ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)).\nReason: ${lv.reason || '\u2014'}\n\nReview it in the HRMS under Leave Requests.`, 'approve_leaves'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.patch('/api/leaves/:id/decide', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'approve_leaves')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const lv = rowToLeave(r.rows[0]); const newSt = req.body.decision === 'Approved' ? 'Approved' : 'Rejected'; lv.status = newSt; lv.decidedAt = today(); lv.decidedBy = req.user.name; await query('UPDATE leaves SET status = ?, data = ? WHERE id = ?', [newSt, JSON.stringify(lv), lv.id]); await notify(lv.employeeId, newSt === 'Approved' ? 'approved' : 'rejected', 'Leave ' + newSt, newSt); res.json({ message: newSt }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.patch('/api/leaves/:id/decide', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'approve_leaves')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const lv = rowToLeave(r.rows[0]); const newSt = req.body.decision === 'Approved' ? 'Approved' : 'Rejected'; lv.status = newSt; lv.decidedAt = today(); lv.decidedBy = req.user.name; await query('UPDATE leaves SET status = ?, data = ? WHERE id = ?', [newSt, JSON.stringify(lv), lv.id]); await notify(lv.employeeId, newSt === 'Approved' ? 'approved' : 'rejected', 'Leave ' + newSt, `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} has been ${newSt.toLowerCase()} by ${req.user.name}.`); res.json({ message: newSt }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.post('/api/leaves/:id/attachments', auth, uploadLeaveAttachment.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Leave not found' }); const lv = rowToLeave(r.rows[0]); if (lv.employeeId !== req.user.employeeId && req.user.role === 'employee') return res.status(403).json({ error: 'No permission' }); if (!lv.attachments) lv.attachments = []; lv.attachments.push({ name: req.body.name || req.file.originalname, filename: req.file.filename, uploadedAt: today(), uploadedBy: req.user.name }); await query('UPDATE leaves SET data = ? WHERE id = ?', [JSON.stringify(lv), lv.id]); res.json({ message: 'Attachment added', filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -389,7 +406,12 @@ app.post('/api/accommodation/allocations', auth, async (req, res) => {
       await query('INSERT INTO bed_allocations (id, employeeId, campId, roomId, bed, checkIn, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [uid('B'), employeeId, campId, roomId, bed, checkIn, JSON.stringify(data)]);
     }
-    await notify(employeeId, 'approved', 'Accommodation assigned', `Room ${room.roomNo}, Bed ${bed}`);
+    const accCampRow = (await query('SELECT * FROM camps WHERE id = ?', [campId])).rows[0];
+    const accCampName = accCampRow ? (rowToCamp(accCampRow).name || 'camp') : 'camp';
+    const accEmpRow = (await query('SELECT * FROM employees WHERE id = ?', [employeeId])).rows[0];
+    const accEmp = accEmpRow ? rowToEmp(accEmpRow) : {};
+    await notify(employeeId, 'approved', 'Accommodation assigned', `You have been allocated accommodation at ${accCampName} \u2014 Room ${room.roomNo}, Bed ${bed}.`);
+    await notifyAdmins(`Accommodation assigned \u2014 ${accEmp.name || ''}`, `${accEmp.name || ''} (${accEmp.empId || ''}) was allocated ${accCampName}, Room ${room.roomNo}, Bed ${bed} by ${req.user.name}.`, ['manage_accommodation', 'assign_beds']);
     await audit(req.user.name, `Bed allocated: emp ${employeeId} → room ${room.roomNo}, bed ${bed}`);
     res.json({ message: 'Allocated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -416,7 +438,10 @@ app.post('/api/accommodation/allocations/:id/exit', auth, async (req, res) => {
     await query('INSERT INTO acc_history (id, employeeId, campId, roomId, bed, checkIn, checkOut, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [uid('AH'), a.employeeId, a.campId, a.roomId, a.bed, a.checkIn || '', checkOut, JSON.stringify({ checkIn: a.checkIn || '', checkOut })]);
     await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
-    await notify(a.employeeId, 'info', 'Accommodation exit recorded', `Checked out on ${checkOut}`);
+    const exEmpRow = (await query('SELECT * FROM employees WHERE id = ?', [a.employeeId])).rows[0];
+    const exEmp = exEmpRow ? rowToEmp(exEmpRow) : {};
+    await notify(a.employeeId, 'info', 'Accommodation exit recorded', `Your accommodation stay has been closed with an exit date of ${checkOut}. This does not change your job status.`);
+    await notifyAdmins(`Accommodation exit \u2014 ${exEmp.name || ''}`, `${exEmp.name || ''} (${exEmp.empId || ''}) checked out of accommodation on ${checkOut} (recorded by ${req.user.name}).`, ['manage_accommodation', 'assign_beds']);
     await audit(req.user.name, `Accommodation exit: emp ${a.employeeId} checked out ${checkOut}`);
     res.json({ message: 'Exit recorded' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -571,7 +596,11 @@ app.post('/api/assets/:id/assign', auth, async (req, res) => {
     await query('UPDATE assets SET assignedTo = ?, assignedDate = ?, status = ? WHERE id = ?',
       [employeeId, assignedDate, 'Assigned', req.params.id]);
     const a = rowToAsset(r.rows[0]);
-    await notify(employeeId, 'approved', 'Asset assigned', `${a.type === 'sim' ? 'SIM' : a.type === 'bike' ? 'Bike' : 'Asset'} ${a.code}`);
+    const asLabel = a.type === 'sim' ? 'SIM' : a.type === 'bike' ? 'Bike' : 'Asset';
+    const asEmpRow = (await query('SELECT * FROM employees WHERE id = ?', [employeeId])).rows[0];
+    const asEmp = asEmpRow ? rowToEmp(asEmpRow) : {};
+    await notify(employeeId, 'approved', 'Asset assigned', `${asLabel} ${a.code}${a.name ? ' (' + a.name + ')' : ''} has been assigned to you.`);
+    await notifyAdmins(`Asset assigned \u2014 ${a.code}`, `${asLabel} ${a.code} was assigned to ${asEmp.name || ''} (${asEmp.empId || ''}) by ${req.user.name}.`, ['manage_assets', 'assign_assets']);
     await audit(req.user.name, `Asset ${a.code} assigned to emp ${employeeId}`);
     res.json({ message: 'Assigned' });
   } catch (e) { res.status(500).json({ error: e.message }); }
