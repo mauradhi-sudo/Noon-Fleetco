@@ -653,18 +653,20 @@ function renderAdmin() {
   const navs = [
     ['dashboard', 'ti-layout-dashboard','Dashboard',    ''],
     ...(can('view_employees') ? [['employees', 'ti-users', 'Employees', '']] : []),
-    ...(can('import_employees') || can('upload_payroll') ? [['import', 'ti-file-upload', 'Bulk Import', '']] : []),
+    ...(can('import_employees') || can('manage_payroll') ? [['import', 'ti-file-upload', 'Bulk Import', '']] : []),
     ...(can('view_leaves') ? [['leaves', 'ti-calendar-event', 'Leaves', pendingLeaves > 0 ? pendingLeaves : '']] : []),
     ...(can('view_payroll') ? [['payroll', 'ti-cash', 'Payroll', '']] : []),
     ...(can('view_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
-    ...(can('view_accommodation') ? [['accommodation', 'ti-bed', 'Accommodation', '']] : []),
-    ...(can('view_assets') ? [['assets', 'ti-motorbike', 'Fleet Assets', '']] : []),
+    ...(can('view_accommodation') || can('assign_beds') || can('manage_accommodation') ? [['accommodation', 'ti-bed', 'Accommodation', '']] : []),
+    ...(can('view_assets') || can('assign_assets') || can('manage_assets') ? [['assets', 'ti-motorbike', 'Fleet Assets', '']] : []),
+    ...(can('view_reports') ? [['reports', 'ti-file-analytics', 'Reports', '']] : []),
     ...(can('manage_settings') ? [['settings', 'ti-settings', 'Settings', '']] : []),
-    ...(isSuperAdmin ? [['admins', 'ti-shield-half', 'Admin Users', ''], ['audit', 'ti-history', 'Audit Log', '']] : [])
+    ...(isSuperAdmin ? [['admins', 'ti-shield-half', 'Admin Users', '']] : []),
+    ...(isSuperAdmin || can('view_audit') ? [['audit', 'ti-history', 'Audit Log', '']] : [])
   ];
   const titles = {
     dashboard: 'Dashboard', employees: 'Employees', import: 'Bulk Import', leaves: 'Leave Requests',
-    payroll: 'Payroll', documents: 'Documents', accommodation: 'Accommodation', assets: 'Fleet Assets', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
+    payroll: 'Payroll', documents: 'Documents', accommodation: 'Accommodation', assets: 'Fleet Assets', reports: 'Reports', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
     empview: S.viewEmp?.name || 'Employee', psview: 'Payslip'
   };
  
@@ -679,6 +681,7 @@ function renderAdmin() {
   else if (S.nav === 'documents') content = renderDocsPage();
   else if (S.nav === 'accommodation') content = renderAccommodation();
   else if (S.nav === 'assets')        content = renderAssets();
+  else if (S.nav === 'reports')       content = renderReports();
   else if (S.nav === 'admins')    content = renderAdminsPage();
   else if (S.nav === 'empview' && S.viewEmp)     content = renderEmpDetail();
   else if (S.nav === 'psview'  && S.viewPayslip) content = renderPsPage();
@@ -900,13 +903,23 @@ function renderDashMetricModal() {
 }
  
 /* ─── Leaves Export ───────────────────────────────────── */
+// Download a server report with the auth token attached (plain <a> links can't
+// carry the bearer token, so we fetch → blob → save).
+async function downloadReport(path, filename) {
+  try {
+    const res = await fetch(API + '/api' + path, { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!res.ok) { let m = 'Download failed'; try { m = (await res.json()).error || m; } catch (e) {} throw new Error(m); }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) { alert('Could not download: ' + e.message); }
+}
+
 function exportLeavesData() {
-  const link = document.createElement('a');
-  link.href = '/api/leaves/export';
-  link.download = 'leaves_' + new Date().toISOString().slice(0, 10) + '.csv';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadReport('/leaves/export', 'leaves_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
  
 /* ─── Data Export (offline workflow) ───────────────────────── */
@@ -1860,6 +1873,7 @@ function renderModal() {
   if (m === 'assetModal')                       return renderAssetModal();
   if (m === 'assignAsset')                      return renderAssignAssetModal();
   if (m === 'accExit')                          return renderAccExitModal();
+  if (m === 'assetImport')                      return renderAssetImportModal();
   return '';
 }
  
@@ -2494,23 +2508,40 @@ async function publishPayroll() {
  
 /* ─── Admin Users Page ─────────────────────────────────────── */
 const ALL_PERMISSIONS = [
-  ['view_employees',     'View employees'],
-  ['add_employees',      'Add new employees'],
-  ['edit_employees',     'Edit employee details'],
-  ['import_employees',   'Bulk import employees'],
-  ['export_data',        'Download / export employee data'],
-  ['view_leaves',        'View leave requests'],
-  ['approve_leaves',     'Approve / reject leaves (Ops & HR teams)'],
-  ['view_payroll',       'View payroll & payslips'],
-  ['upload_payroll',     'Upload bulk payroll'],
-  ['view_documents',     'View documents'],
-  ['upload_documents',   'Upload documents'],
-  ['view_accommodation', 'View accommodation & bed allocations'],
-  ['manage_accommodation','Manage camps, rooms & bed allocations'],
-  ['view_assets',        'View fleet assets (bikes, SIMs)'],
-  ['manage_assets',      'Manage & assign fleet assets'],
-  ['manage_settings',    'Manage custom fields & payroll entities'],
+  ['view_employees',      'View employees'],
+  ['add_employees',       'Add new employees'],
+  ['edit_employees',      'Edit employee details'],
+  ['delete_employees',    'Delete employees'],
+  ['import_employees',    'Bulk import employees'],
+  ['export_data',         'Download / export employee data'],
+  ['view_leaves',         'View leave requests'],
+  ['approve_leaves',      'Approve / reject leaves'],
+  ['view_payroll',        'View payroll & payslips'],
+  ['manage_payroll',      'Upload / manage payroll'],
+  ['view_documents',      'View documents'],
+  ['upload_documents',    'Upload / manage documents'],
+  ['view_accommodation',  'View accommodation & allocations'],
+  ['assign_beds',         'Assign / vacate beds'],
+  ['manage_accommodation','Manage camps & rooms'],
+  ['view_assets',         'View fleet assets'],
+  ['assign_assets',       'Assign / return assets & change status'],
+  ['manage_assets',       'Add / edit / delete assets'],
+  ['import_assets',       'Bulk upload / download assets'],
+  ['view_reports',        'View & download reports'],
+  ['view_audit',          'View audit log'],
+  ['manage_settings',     'Manage custom fields & settings'],
 ];
+// grouped view for the admin permission picker (lookups still use the flat list above)
+const PERM_GROUPS = [
+  ['Employees',        ['view_employees', 'add_employees', 'edit_employees', 'delete_employees', 'import_employees', 'export_data']],
+  ['Leave',            ['view_leaves', 'approve_leaves']],
+  ['Payroll',          ['view_payroll', 'manage_payroll']],
+  ['Documents',        ['view_documents', 'upload_documents']],
+  ['Accommodation',    ['view_accommodation', 'assign_beds', 'manage_accommodation']],
+  ['Fleet assets',     ['view_assets', 'assign_assets', 'manage_assets', 'import_assets']],
+  ['Reports & system', ['view_reports', 'view_audit', 'manage_settings']],
+];
+const labelOf = (k) => (ALL_PERMISSIONS.find(p => p[0] === k) || [k, k])[1];
  
 function renderAdminsPage() {
   const admins = S.adminsList || [];
@@ -2563,14 +2594,18 @@ function renderAddAdminModal() {
         <div class="field"><label>Email Address</label><input id="adm-email" type="email" value="${editing?.email||''}" placeholder="sara@noon.com"/></div>
       </div>
       <div class="section-label" style="margin-top:1rem">Permissions</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:.875rem">Select what this admin can do. Leave all unchecked for view-only access.</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${ALL_PERMISSIONS.map(([key, label]) => `
-          <label style="display:flex;align-items:center;gap:8px;background:#fafaf8;border:1px solid var(--border);border-radius:7px;padding:8px 10px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="perm-${key}" ${(perms.includes(key))?'checked':''} style="accent-color:var(--green)"/>
-            ${label}
-          </label>`).join('')}
-      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:.875rem">Tick exactly what this admin may do. Leaving everything unchecked = no access. A "view" box lets them see a section; the others let them act in it.</p>
+      ${PERM_GROUPS.map(([group, keys]) => `
+        <div style="margin-bottom:.9rem">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">${group}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${keys.map(key => `
+              <label style="display:flex;align-items:center;gap:8px;background:#fafaf8;border:1px solid var(--border);border-radius:7px;padding:8px 10px;cursor:pointer;font-size:13px">
+                <input type="checkbox" id="perm-${key}" ${(perms.includes(key)) ? 'checked' : ''} style="accent-color:var(--green)"/>
+                ${labelOf(key)}
+              </label>`).join('')}
+          </div>
+        </div>`).join('')}
       <div class="alert alert-i" style="margin-top:1rem">
         <i class="ti ti-mail"></i>An invitation email will be sent to the admin with login instructions.
       </div>
@@ -2636,6 +2671,9 @@ async function saveEditAdmin() {
 function accCanManage() {
   return !!(S.user && (S.user.isSuperAdmin || (S.user.permissions || []).includes('manage_accommodation')));
 }
+function accCanAssign() {
+  return accCanManage() || !!(S.user && (S.user.permissions || []).includes('assign_beds'));
+}
 
 async function loadAccommodation(force) {
   try {
@@ -2666,6 +2704,7 @@ function renderAccommodation() {
   const rooms  = S.accRooms || [];
   const allocs = S.allocations || [];
   const manage = accCanManage();
+  const assign = accCanAssign();
   const totalCap = camps.reduce((s, c) => s + (+c.capacity || 0), 0);
   const totalOcc = allocs.length;
   const tab = S.accTab || 'rooms';
@@ -2680,7 +2719,7 @@ function renderAccommodation() {
     <div class="tab-btn ${tab==='rooms'?'active':''}" onclick="S.accTab='rooms';R()">Camps &amp; Rooms</div>
     <div class="tab-btn ${tab==='allocation'?'active':''}" onclick="S.accTab='allocation';R()">Bed Allocation</div>
   </div>
-  ${tab==='rooms' ? renderAccCampsRooms(manage) : renderAccAllocations(manage)}`;
+  ${tab==='rooms' ? renderAccCampsRooms(manage) : renderAccAllocations(assign)}`;
 }
 
 function renderAccCampsRooms(manage) {
@@ -2791,7 +2830,7 @@ function renderAccAllocations(manage) {
 function renderAccommodationTab(e) {
   if (!e) return '';
   const a = (S.allocations || []).find(x => x.employeeId === e.id);
-  const manage = accCanManage();
+  const manage = accCanAssign();
   const past = (S.accHistory || []).filter(h => h.employeeId === e.id);
   const historyBlock = past.length ? `<div class="section-label" style="margin-top:1.25rem">Previous stays</div>
     <div class="tbl-wrap"><table><thead><tr><th>Camp</th><th>Room</th><th>Bed</th><th>Check-in</th><th>Exited</th></tr></thead><tbody>
@@ -3011,6 +3050,12 @@ async function vacateBed(id) {
 function assetCanManage() {
   return !!(S.user && (S.user.isSuperAdmin || (S.user.permissions || []).includes('manage_assets')));
 }
+function assetCanAssign() {
+  return assetCanManage() || !!(S.user && (S.user.permissions || []).includes('assign_assets'));
+}
+function assetCanImport() {
+  return assetCanManage() || !!(S.user && (S.user.permissions || []).includes('import_assets'));
+}
 
 async function loadAssets(force) {
   try {
@@ -3033,6 +3078,33 @@ const ASSET_KNOWN = {
   sim:  ['number', 'provider', 'puk', 'remarks'],
   other: []
 };
+// Accepted column headers (lower-cased) for bulk asset upload → internal field.
+// '__pn' = "Plate / Number" which maps to plate for bikes, number for SIMs.
+const ASSET_ALIAS = {
+  'bike id': 'code', 'sim id': 'code', 'asset id': 'code', 'asset code': 'code', 'code': 'code', 'id': 'code',
+  'name': 'name', 'name / description': 'name', 'description': 'name',
+  'status': 'status',
+  'plate': 'plateNo', 'plate number': 'plateNo', 'plate no': 'plateNo', 'plateno': 'plateNo', 'plate / number': '__pn',
+  'chassis no': 'chassisNo', 'chassis number': 'chassisNo', 'chassisno': 'chassisNo', 'chassis': 'chassisNo',
+  'engine no': 'engineNo', 'engine number': 'engineNo', 'engineno': 'engineNo', 'engine': 'engineNo',
+  'brand': 'brand', 'model': 'model',
+  'registration expiry': 'registrationExpiry', 'reg. expiry': 'registrationExpiry', 'reg expiry': 'registrationExpiry', 'registrationexpiry': 'registrationExpiry', 'registration': 'registrationExpiry',
+  'insurance expiry': 'insuranceExpiry', 'ins. expiry': 'insuranceExpiry', 'ins expiry': 'insuranceExpiry', 'insuranceexpiry': 'insuranceExpiry', 'insurance': 'insuranceExpiry',
+  'number': 'number', 'sim number': 'number', 'mobile number': 'number', 'msisdn': 'number',
+  'provider': 'provider', 'puk': 'puk', 'remarks': 'remarks', 'note': 'remarks', 'notes': 'remarks',
+  'assign to': 'assignTo', 'assign to (employee id)': 'assignTo', 'assigned to': 'assignTo', 'assign to employee id': 'assignTo', 'holder id': 'assignTo', 'holder': 'assignTo', 'employee id': 'assignTo', 'emp id': 'assignTo',
+  'assigned date': 'assignedDate', 'assigned on': 'assignedDate', 'assign date': 'assignedDate',
+};
+function isoDate(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date && !isNaN(v)) {
+    const z = n => String(n).padStart(2, '0');
+    return v.getFullYear() + '-' + z(v.getMonth() + 1) + '-' + z(v.getDate());
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return m ? `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}` : s;
+}
 function assetStatuses(type) {
   if (type === 'bike') return ['Available', 'Assigned', 'Maintenance', 'Accident', 'Inactive'];
   if (type === 'sim')  return ['Available', 'Assigned', 'Blocked', 'Lost', 'Inactive'];
@@ -3087,9 +3159,157 @@ function renderDashAssets() {
   </div>` : ''}`;
 }
 
+/* ─── Asset bulk import / export ───────────────────────────── */
+// Template and export share one 3-sheet layout so a downloaded file can be
+// edited and re-uploaded. Sheet name decides the asset type.
+const ASSET_SHEETS = [
+  ['Bikes', 'bike',  ['Bike ID', 'Plate No', 'Chassis No', 'Engine No', 'Brand', 'Model', 'Registration Expiry', 'Insurance Expiry', 'Status', 'Assign To (Employee ID)', 'Assigned Date']],
+  ['SIMs',  'sim',   ['SIM ID', 'Number', 'Provider', 'PUK', 'Remarks', 'Status', 'Assign To (Employee ID)', 'Assigned Date']],
+  ['Other', 'other', ['Asset ID', 'Name / Description', 'Status', 'Assign To (Employee ID)', 'Assigned Date']],
+];
+function assetSheetType(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('bike')) return 'bike';
+  if (n.includes('sim'))  return 'sim';
+  return 'other';
+}
+
+function downloadAssetTemplate() {
+  if (!window.XLSX) return alert('Spreadsheet engine still loading — please refresh and try again.');
+  const wb = XLSX.utils.book_new();
+  const info = [
+    ['Noon Fleet — Asset bulk upload template'],
+    [''],
+    ['HOW TO USE'],
+    ['1. Use one sheet per asset type: Bikes, SIMs, Other. Sheets you don\'t need can be left empty.'],
+    ['2. The first column (Bike ID / SIM ID / Asset ID) is REQUIRED — it is the unique code for the asset.'],
+    ['3. Re-uploading a row whose ID already exists UPDATES that asset. A new ID is ADDED. Blank cells are left unchanged when updating.'],
+    ['4. All dates must be in YYYY-MM-DD format, e.g. 2026-03-01.'],
+    ['5. To record who holds an asset, put their Employee ID (e.g. SN0002) in "Assign To (Employee ID)". The status is set to Assigned automatically.'],
+    ['6. DELETE the grey example row in each sheet before you upload.'],
+    [''],
+    ['ALLOWED STATUS VALUES'],
+    ['Bikes: ' + assetStatuses('bike').join(', ')],
+    ['SIMs:  ' + assetStatuses('sim').join(', ')],
+    ['Other: ' + assetStatuses('other').join(', ')],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), 'Read me');
+  const examples = {
+    bike:  [['BIKE100', 'DXB A 12345', 'MLHJC9215...', 'JC92E-1234', 'Honda', 'CB125F', '2026-09-30', '2026-12-15', 'Available', '', '']],
+    sim:   [['SIM100', '0501234567', 'Du', '12345678', 'example row — delete', 'Available', '', '']],
+    other: [['AST100', 'Delivery box (large) — delete this example', 'Available', '', '']],
+  };
+  ASSET_SHEETS.forEach(([sheet, type, headers]) => {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...(examples[type] || [])]), sheet);
+  });
+  XLSX.writeFile(wb, 'NoonFleet_Asset_Upload_Template.xlsx');
+}
+
+function downloadAllAssets() {
+  if (!window.XLSX) return alert('Spreadsheet engine still loading — please refresh and try again.');
+  const all = S.assets || [];
+  const wb = XLSX.utils.book_new();
+  ASSET_SHEETS.forEach(([sheet, type, headers]) => {
+    const rows = all.filter(a => a.type === type).map(a =>
+      type === 'bike'  ? [a.code, a.plateNo || '', a.chassisNo || '', a.engineNo || '', a.brand || '', a.model || '', a.registrationExpiry || '', a.insuranceExpiry || '', a.status || '', a.holderCode || '', a.assignedDate || '']
+    : type === 'sim'   ? [a.code, a.number || '', a.provider || '', a.puk || '', a.remarks || '', a.status || '', a.holderCode || '', a.assignedDate || '']
+    :                    [a.code, a.name || '', a.status || '', a.holderCode || '', a.assignedDate || '']);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...rows]), sheet);
+  });
+  XLSX.writeFile(wb, 'NoonFleet_Assets_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+
+function openAssetImport() {
+  if (!assetCanImport()) return;
+  S.assetImport = { rows: null, counts: null, errors: [], fileName: '', busy: false, result: null };
+  openModal('assetImport');
+}
+
+function assetImportPick(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const rows = [], counts = { bike: 0, sim: 0, other: 0 }, errors = [];
+      wb.SheetNames.forEach(sheetName => {
+        if (/read.?me|instruction/i.test(sheetName)) return;
+        const type = assetSheetType(sheetName);
+        XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' }).forEach(raw => {
+          const row = { type };
+          Object.keys(raw).forEach(h => {
+            const key = ASSET_ALIAS[String(h).trim().toLowerCase()];
+            if (!key) return;
+            const realKey = key === '__pn' ? (type === 'sim' ? 'number' : 'plateNo') : key;
+            let val = raw[h];
+            if (realKey === 'registrationExpiry' || realKey === 'insuranceExpiry' || realKey === 'assignedDate') val = isoDate(val);
+            row[realKey] = (typeof val === 'string') ? val.trim() : val;
+          });
+          if (!String(row.code || '').trim()) return;
+          rows.push(row); counts[type] = (counts[type] || 0) + 1;
+        });
+      });
+      S.assetImport = { rows, counts, errors, fileName: file.name, busy: false, result: null };
+    } catch (err) {
+      S.assetImport = { rows: null, counts: null, errors: ['Could not read this file: ' + err.message], fileName: file.name, busy: false, result: null };
+    }
+    R();
+  };
+  reader.onerror = () => { S.assetImport = { rows: null, counts: null, errors: ['Could not read the file.'], fileName: file.name, busy: false, result: null }; R(); };
+  reader.readAsArrayBuffer(file);
+}
+
+async function saveAssetImport() {
+  const imp = S.assetImport || {};
+  if (!imp.rows || !imp.rows.length || imp.busy) return;
+  S.assetImport.busy = true; R();
+  try {
+    const res = await api('POST', '/assets/bulk/import', { rows: imp.rows });
+    S.assetImport.result = res; S.assetImport.busy = false;
+    auditLog && auditLog(`Asset bulk import: +${res.added}, ~${res.updated}`);
+    await loadAssets(true);
+    R();
+  } catch (e) {
+    S.assetImport.busy = false; S.assetImport.errors = [e.message]; R();
+  }
+}
+
+function renderAssetImportModal() {
+  const imp = S.assetImport || {};
+  const c = imp.counts || {};
+  const total = (imp.rows || []).length;
+  const res = imp.result;
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head"><h3>Bulk upload assets</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      ${res ? `
+        <div class="alert alert-i"><i class="ti ti-check"></i><div><b>Import complete.</b><br>Added ${res.added}, updated ${res.updated}${res.skipped ? `, skipped ${res.skipped}` : ''}.</div></div>
+        ${(res.errors && res.errors.length) ? `<div class="alert alert-w"><i class="ti ti-alert-triangle"></i><div><b>Notes (${res.errors.length}):</b><br>${res.errors.map(x => '• ' + x).join('<br>')}</div></div>` : ''}
+      ` : `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem">Upload a file built from the template. Sheets named <b>Bikes</b>, <b>SIMs</b> and <b>Other</b> are read — a row whose ID already exists is updated, a new ID is added.</p>
+        <div style="margin-bottom:.9rem"><button class="btn sm" onclick="downloadAssetTemplate()"><i class="ti ti-file-spreadsheet"></i> Download template</button></div>
+        <div class="field full"><label>Excel file (.xlsx)</label>
+          <input type="file" accept=".xlsx,.xls" onchange="assetImportPick(this)" style="padding:9px;border:1px dashed var(--border);border-radius:8px;width:100%;box-sizing:border-box"/></div>
+        ${imp.fileName ? `<div style="font-size:12px;color:var(--muted);margin-top:6px"><i class="ti ti-file"></i> ${imp.fileName}</div>` : ''}
+        ${(imp.errors && imp.errors.length) ? `<div class="alert alert-e" style="margin-top:.75rem"><i class="ti ti-alert-circle"></i><div>${imp.errors.map(x => '• ' + x).join('<br>')}</div></div>` : ''}
+        ${imp.rows ? `<div class="alert ${total ? 'alert-i' : 'alert-w'}" style="margin-top:.75rem"><i class="ti ti-list-check"></i><div>${total
+          ? `Ready to import <b>${total}</b> row${total === 1 ? '' : 's'} — ${c.bike || 0} bike(s), ${c.sim || 0} SIM(s), ${c.other || 0} other. Existing IDs will be updated.`
+          : 'No rows with an ID were found. Check that your sheets are named Bikes / SIMs / Other and the ID column is filled.'}</div></div>` : ''}
+      `}
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="openModal(null)">${res ? 'Close' : 'Cancel'}</button>
+      ${res ? '' : `<button class="btn g" onclick="saveAssetImport()" ${(!imp.rows || !total || imp.busy) ? 'disabled style="opacity:.5"' : ''}>${imp.busy ? 'Importing…' : `Import ${total || ''} row${total === 1 ? '' : 's'}`}</button>`}
+    </div>
+  </div></div>`;
+}
+
 function renderAssets() {
   const all = S.assets || [];
   const manage = assetCanManage();
+  const assign = assetCanAssign();
+  const imp = assetCanImport();
   const tab = S.assetTab || 'bike';
   const counts = t => {
     const a = all.filter(x => x.type === t);
@@ -3114,15 +3334,20 @@ function renderAssets() {
         <td>${expiryCell(a.date)}</td><td>${a.holder || '<span style="color:var(--faint)">Unassigned</span>'}</td>
       </tr>`).join('')}
     </tbody></table></div></div>` : ''}
+  ${imp ? `<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:.85rem">
+    <button class="btn" onclick="downloadAllAssets()"><i class="ti ti-download"></i> Export all</button>
+    <button class="btn" onclick="downloadAssetTemplate()"><i class="ti ti-file-spreadsheet"></i> Template</button>
+    <button class="btn g" onclick="openAssetImport()"><i class="ti ti-file-upload"></i> Bulk upload</button>
+  </div>` : ''}
   <div class="tabs-bar">
     <div class="tab-btn ${tab === 'bike' ? 'active' : ''}" onclick="S.assetTab='bike';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-motorbike"></i> Bikes</div>
     <div class="tab-btn ${tab === 'sim' ? 'active' : ''}" onclick="S.assetTab='sim';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-device-mobile"></i> SIM Cards</div>
     <div class="tab-btn ${tab === 'other' ? 'active' : ''}" onclick="S.assetTab='other';S.assetSearch='';S.assetStatusFilter='';R()"><i class="ti ti-box"></i> Other</div>
   </div>
-  ${renderAssetTable(tab, manage)}`;
+  ${renderAssetTable(tab, manage, assign)}`;
 }
 
-function renderAssetTable(type, manage) {
+function renderAssetTable(type, manage, assign) {
   const q = (S.assetSearch || '').toLowerCase();
   const sf = S.assetStatusFilter || '';
   let list = (S.assets || []).filter(a => a.type === type);
@@ -3143,12 +3368,12 @@ function renderAssetTable(type, manage) {
   const rowHolder = a => a.assignedTo
     ? `<div style="font-size:12px"><b>${a.holderName || '—'}</b><br><span style="color:var(--muted)">${a.holderCode || ''} · ${fmtDate(a.assignedDate)}</span></div>`
     : '<span style="color:var(--faint)">Unassigned</span>';
-  const actions = a => manage ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
-      <button class="btn sm" onclick="openAssetModal('${type}','${a.id}')"><i class="ti ti-edit"></i></button>
-      ${a.assignedTo
+  const actions = a => (manage || assign) ? `<div style="display:flex;gap:4px;flex-wrap:wrap">
+      ${manage ? `<button class="btn sm" onclick="openAssetModal('${type}','${a.id}')" title="Edit"><i class="ti ti-edit"></i></button>` : ''}
+      ${assign ? (a.assignedTo
         ? `<button class="btn sm" style="color:var(--amber);border-color:var(--amber)" onclick="unassignAsset('${a.id}')" title="Return / unassign"><i class="ti ti-arrow-back-up"></i></button>`
-        : `<button class="btn sm" style="color:var(--green);border-color:var(--green)" onclick="openAssignAssetModal('${a.id}','')" title="Assign"><i class="ti ti-user-plus"></i></button>`}
-      <button class="btn sm" style="color:var(--red);border-color:var(--red)" onclick="deleteAsset('${a.id}')"><i class="ti ti-trash"></i></button>
+        : `<button class="btn sm" style="color:var(--green);border-color:var(--green)" onclick="openAssignAssetModal('${a.id}','')" title="Assign"><i class="ti ti-user-plus"></i></button>`) : ''}
+      ${manage ? `<button class="btn sm" style="color:var(--red);border-color:var(--red)" onclick="deleteAsset('${a.id}')" title="Delete"><i class="ti ti-trash"></i></button>` : ''}
     </div>` : '';
 
   const body = list.length === 0
@@ -3186,6 +3411,7 @@ function renderEmpAssetsTab(e) {
   if (!e) return '';
   const mine = (S.assets || []).filter(a => a.assignedTo === e.id);
   const manage = assetCanManage();
+  const assign = assetCanAssign();
   const block = (type, label, icon) => {
     const items = mine.filter(a => a.type === type);
     if (!items.length) return '';
@@ -3195,12 +3421,12 @@ function renderEmpAssetsTab(e) {
       ${type === 'sim' ? `<div class="info-cell"><div class="lbl">Number</div><div class="val" style="font-family:monospace">${a.number || '—'}</div></div>` : ''}
       ${type === 'other' ? `<div class="info-cell"><div class="lbl">Name</div><div class="val">${a.name || '—'}</div></div>` : ''}
       <div class="info-cell"><div class="lbl">Assigned</div><div class="val">${fmtDate(a.assignedDate)}</div></div>
-      <div class="info-cell"><div class="lbl">Status</div><div class="val">${assetStatusBadge(a.status)} ${manage ? `<button class="btn sm" style="margin-left:6px;color:var(--amber);border-color:var(--amber)" onclick="unassignAsset('${a.id}')">Return</button>` : ''}</div></div>
+      <div class="info-cell"><div class="lbl">Status</div><div class="val">${assetStatusBadge(a.status)} ${assign ? `<button class="btn sm" style="margin-left:6px;color:var(--amber);border-color:var(--amber)" onclick="unassignAsset('${a.id}')">Return</button>` : ''}</div></div>
     `).join('')}</div>`;
   };
   const anyAssets = mine.length > 0;
   return `<div class="card"><div class="card-head"><h3>Assigned assets</h3>
-    ${manage ? `<button class="btn g" onclick="openAssignAssetModal('','${e.id}')"><i class="ti ti-plus"></i> Assign asset</button>` : ''}
+    ${assign ? `<button class="btn g" onclick="openAssignAssetModal('','${e.id}')"><i class="ti ti-plus"></i> Assign asset</button>` : ''}
   </div><div class="card-body">
     ${anyAssets ? `${block('bike', 'Bike', 'ti-motorbike')}${block('sim', 'SIM card', 'ti-device-mobile')}${block('other', 'Other assets', 'ti-box')}`
       : `<div class="alert alert-i"><i class="ti ti-box"></i>No assets are currently assigned to this employee.</div>`}
@@ -3428,6 +3654,47 @@ async function saveAccExit() {
     try { S.accHistory = await api('GET', '/accommodation/history'); } catch (e) {}
     R();
   } catch (e) { alert('Error: ' + e.message); }
+}
+
+/* ─── Reports ──────────────────────────────────────────────── */
+function renderReports() {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const groups = [
+    ['Employees', 'ti-users', 'var(--blue)', [
+      ['Employee details', 'Full employee master — every field for all staff.', '/employees/export', 'employees_' + stamp + '.xlsx'],
+    ]],
+    ['Leave', 'ti-calendar-event', 'var(--amber)', [
+      ['Leave register', 'All leave requests with type, dates, status and approver.', '/leaves/export', 'leaves_' + stamp + '.xlsx'],
+    ]],
+    ['Payroll', 'ti-cash', 'var(--green)', [
+      ['Payroll / payslips', 'All payslips — basic, allowances, deductions and net pay.', '/payslips/export', 'payslips_' + stamp + '.xlsx'],
+    ]],
+    ['Accommodation', 'ti-bed', '#7A5AF8', [
+      ['Accommodation report', 'Current occupants, camp occupancy, and full stay history (3 sheets).', '/reports/accommodation', 'accommodation_report_' + stamp + '.xlsx'],
+    ]],
+    ['Fleet assets', 'ti-motorbike', '#185FA5', [
+      ['Asset register', 'Every bike, SIM and other asset with its current holder (3 sheets).', '/reports/assets', 'asset_register_' + stamp + '.xlsx'],
+    ]],
+    ['Compliance', 'ti-alert-triangle', 'var(--red)', [
+      ['Expiring documents', 'Visas expiring ≤90 days and bike registration/insurance ≤30 days.', '/reports/expiring', 'expiring_documents_' + stamp + '.xlsx'],
+    ]],
+  ];
+  return `
+  <div class="alert alert-i" style="margin-bottom:1.25rem"><i class="ti ti-download"></i><div>Each report downloads as an Excel (.xlsx) file and reflects live data at the moment you download it.</div></div>
+  ${groups.map(([group, icon, color, items]) => `
+    <div class="card" style="margin-bottom:1.1rem">
+      <div class="card-head"><h3><i class="ti ${icon}" style="color:${color}"></i> ${group}</h3></div>
+      <div class="card-body">
+        ${items.map(([title, desc, path, file]) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px">
+            <div style="min-width:0">
+              <div style="font-weight:600">${title}</div>
+              <div style="font-size:12px;color:var(--muted)">${desc}</div>
+            </div>
+            <button class="btn g" style="flex-shrink:0" onclick="downloadReport('${path}','${file}')"><i class="ti ti-download"></i> Download</button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('')}`;
 }
 
 /* ─── Event Binding & Init ─────────────────────────────────── */
