@@ -430,8 +430,11 @@ async function api(method, path, data, isFormData) {
   } else if (isFormData) {
     opts.body = data; // FormData sets its own content-type
   }
-  const res  = await fetch(API + '/api' + path, opts);
-  const json = await res.json();
+  const res = await fetch(API + '/api' + path, opts);
+  let json = null;
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) { try { json = await res.json(); } catch (e) { json = null; } }
+  else { try { await res.text(); } catch (e) {} }
   if (!res.ok) {
     // A 401 on an authenticated call means the token is no longer valid
     // (expired, or the server's secret changed) — return to the login screen
@@ -442,9 +445,9 @@ async function api(method, path, data, isFormData) {
       S.loginErr = 'Your session expired — please sign in again.';
       R();
     }
-    throw new Error(json.error || 'Request failed');
+    throw new Error((json && json.error) || (res.status === 404 ? 'That action is not available on the server (404).' : ('Request failed (' + res.status + ')')));
   }
-  return json;
+  return json || {};
 }
  
 async function loadData(force) {
