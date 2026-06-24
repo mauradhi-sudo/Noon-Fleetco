@@ -458,6 +458,7 @@ async function loadData(force) {
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
       if (!S.documents     || force) S.documents     = await api('GET', '/documents');
       if (!S.assetSummary  || force) { try { S.assetSummary = await api('GET', '/assets/summary'); } catch (e) {} }
+      if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) {} }
     } else if (S.screen === 'employee') {
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
@@ -744,7 +745,109 @@ function renderAdmin() {
 }
  
 /* ─── Dashboard ────────────────────────────────────────────── */
+function setDashView(v) { S.dashView = v; R(); }
+
+/* shared dashboard building blocks */
+function _dCard(icon, color, bg, lbl, val, sub, onclick) {
+  return `<div class="stat" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+    <div style="min-width:0"><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div>${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${sub}</div>` : ''}</div>
+  </div>`;
+}
+function _progCard(icon, color, bg, lbl, have, total) {
+  const pc = total ? Math.round(have / total * 100) : 0;
+  return `<div class="stat" style="display:flex;align-items:center;gap:12px">
+    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+    <div style="flex:1;min-width:0"><div class="lbl">${lbl}</div>
+      <div class="val" style="font-size:20px">${(have||0).toLocaleString()} <span style="font-size:12px;color:var(--muted);font-weight:400">/ ${(total||0).toLocaleString()} &middot; ${pc}%</span></div>
+      <div class="leave-bar" style="height:6px;margin-top:6px"><div class="leave-fill" style="width:${pc}%;background:${color}"></div></div>
+    </div></div>`;
+}
+function _posBars(emps, label) {
+  const byPos = {}; emps.forEach(e => { const k = e.position || 'Other'; byPos[k] = (byPos[k] || 0) + 1; });
+  const rows = Object.entries(byPos).sort((a, b) => b[1] - a[1]); const max = rows.length ? rows[0][1] : 1; const tot = emps.length || 1;
+  return `<div class="card"><div class="card-head"><h3>Headcount by position</h3><span style="font-size:11px;color:var(--muted)">${rows.length} positions &middot; ${label || 'all staff'}</span></div>
+    <div class="card-body">${rows.length ? rows.map(([p, n]) => `
+      <div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${p}</span><b>${n.toLocaleString()} <span style="color:var(--muted);font-weight:400">(${(n / tot * 100).toFixed(1)}%)</span></b></div>
+      <div class="leave-bar" style="height:8px"><div class="leave-fill" style="width:${Math.round(n / max * 100)}%"></div></div></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No staff records yet.</div>'}</div></div>`;
+}
+function _expiringCard(emps, field, days, icon, label) {
+  const cutoff = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
+  const list = emps.filter(e => e[field] && e[field] <= cutoff);
+  return _dCard(icon, 'var(--red)', '#FCEBEB', label, list.length.toLocaleString(), `expiring within ${days} days`);
+}
+
 function renderDashboard() {
+  const v = S.dashView || 'hr';
+  const tab = (k, label, icon) => `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1px solid ${v === k ? 'var(--green)' : 'var(--border)'};background:${v === k ? 'var(--green)' : '#fff'};color:${v === k ? '#fff' : 'var(--text)'};font-weight:600;font-size:13px;cursor:pointer"><i class="ti ${icon}"></i> ${label}</button>`;
+  const switcher = `<div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>`;
+  const body = v === 'onb' ? renderDashONB() : v === 'ops' ? renderDashOps() : renderDashHR();
+  return switcher + body;
+}
+
+function renderDashONB() {
+  const es = S.employees || [];
+  const n = es.length;
+  const have = f => es.filter(e => e[f]).length;
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', n.toLocaleString(), 'all records')}
+    ${_progCard('ti-school', '#7A5AF8', '#EEEAFB', 'Induction completed', have('inductionDate'), n)}
+    ${_progCard('ti-stethoscope', 'var(--green)', 'var(--green-light)', 'Medical done', have('medicalDate'), n)}
+    ${_progCard('ti-fingerprint', '#185FA5', '#E6F1FB', 'Biometric done', have('biometricDate'), n)}
+    ${_progCard('ti-id', 'var(--amber)', '#FAEEDA', 'EID received', have('eidDate'), n)}
+  </div>
+  <div class="section-label" style="margin:1.25rem 0 .6rem">Document expiry alerts</div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+    ${_expiringCard(es, 'eidExpiry', 90, 'ti-id-badge-2', 'EID expiring')}
+    ${_expiringCard(es, 'passportExpiry', 90, 'ti-book', 'Passport expiring')}
+    ${_expiringCard(es, 'laborCardExpiry', 90, 'ti-license', 'Labour card expiring')}
+  </div>
+  ${_posBars(es, 'all staff')}`;
+}
+
+function renderDashOps() {
+  const es = S.employees || [];
+  const active = es.filter(e => e.status === 'Active');
+  const inact = es.filter(e => e.status !== 'Active');
+  const isRider = e => /rider/i.test(e.position || '') || !!e.riderId;
+  const isWalker = e => /walk/i.test(e.position || '');
+  const riders = es.filter(isRider);
+  const walkers = es.filter(e => isWalker(e) && !isRider(e));
+  const others = es.filter(e => !isRider(e) && !isWalker(e));
+  const cnt = (arr, fn) => arr.filter(fn).length;
+  const A = S.assets || [];
+  const bk = A.filter(a => a.type === 'bike'); const sm = A.filter(a => a.type === 'sim');
+  const by = (arr, st) => arr.filter(a => (a.status || '') === st).length;
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
+    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', es.length.toLocaleString())}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Active', active.length.toLocaleString())}
+    ${_dCard('ti-user-off', 'var(--red)', '#FCEBEB', 'Inactive', inact.length.toLocaleString())}
+  </div>
+  <div class="section-label" style="margin:1.25rem 0 .6rem">Deployment pipeline</div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(245px,1fr))">
+    ${_dCard('ti-motorbike', 'var(--amber)', '#FAEEDA', 'Riders: EID received, not deployed', cnt(riders, e => e.eidDate && !e.deploymentDate).toLocaleString(), 'delivery riders')}
+    ${_dCard('ti-license', 'var(--amber)', '#FAEEDA', 'Riders: Licence received, not deployed', cnt(riders, e => e.dlDate && !e.deploymentDate).toLocaleString(), 'delivery riders')}
+    ${_dCard('ti-walk', 'var(--amber)', '#FAEEDA', 'Walkers: EID received, not deployed', cnt(walkers, e => e.eidDate && !e.deploymentDate).toLocaleString(), 'walkers')}
+    ${_dCard('ti-user-exclamation', '#7A5AF8', '#EEEAFB', 'Others: medical+biometric, not deployed', cnt(others, e => e.medicalDate && e.biometricDate && !e.deploymentDate).toLocaleString(), 'non rider/walker')}
+  </div>
+  <div class="section-label" style="margin:1.25rem 0 .6rem">Fleet &mdash; bikes</div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    ${_dCard('ti-motorbike', '#185FA5', '#E6F1FB', 'Total bikes', bk.length.toLocaleString())}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(bk, 'Assigned').toLocaleString())}
+    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(bk, 'Available').toLocaleString())}
+    ${_dCard('ti-tools', 'var(--amber)', '#FAEEDA', 'In maintenance', by(bk, 'Maintenance').toLocaleString())}
+  </div>
+  <div class="section-label" style="margin:1.1rem 0 .6rem">Fleet &mdash; SIMs</div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    ${_dCard('ti-device-mobile', '#185FA5', '#E6F1FB', 'Total SIMs', sm.length.toLocaleString())}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(sm, 'Assigned').toLocaleString())}
+    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(sm, 'Available').toLocaleString())}
+    ${_dCard('ti-ban', 'var(--red)', '#FCEBEB', 'Blocked', by(sm, 'Blocked').toLocaleString())}
+  </div>
+  ${_posBars(es, 'all staff')}`;
+}
+
+function renderDashHR() {
   const es     = S.employees || [];
   const active = es.filter(e => e.status === 'Active');
   const inact  = es.filter(e => e.status !== 'Active');
@@ -2007,12 +2110,23 @@ function renderEditEmpModal() {
         <div class="field"><label>Medical date</label><input id="emed" type="date" value="${e.medicalDate || ''}"/></div>
         <div class="field"><label>Biometric date</label><input id="ebio" type="date" value="${e.biometricDate || ''}"/></div>
       </div>
-      <div class="section-label">Visa &amp; documents</div>
+      <div class="section-label">Visa, ID &amp; document expiry</div>
       <div class="form-grid">
         <div class="field"><label>Passport number</label><input id="ep" value="${e.passportNo || ''}"/></div>
+        <div class="field"><label>Passport expiry</label><input id="epexp" type="date" value="${e.passportExpiry || ''}"/></div>
         <div class="field"><label>Visa status</label><input id="evis" value="${e.visaStatus || ''}"/></div>
         <div class="field"><label>E-visa expiry</label><input id="eexp" type="date" value="${e.evisaExpiry || ''}"/></div>
         <div class="field"><label>EID number</label><input id="eeid" value="${e.eidNo || ''}"/></div>
+        <div class="field"><label>EID expiry</label><input id="eeidexp" type="date" value="${e.eidExpiry || ''}"/></div>
+        <div class="field"><label>Labour card expiry</label><input id="elabexp" type="date" value="${e.laborCardExpiry || ''}"/></div>
+        <div class="field"><label>Driving licence expiry</label><input id="edlexp" type="date" value="${e.licenseExpiry || ''}"/></div>
+        <div class="field"><label>Contract expiry</label><input id="ecexp" type="date" value="${e.contractExpiry || ''}"/></div>
+      </div>
+      <div class="section-label">Onboarding milestones</div>
+      <div class="form-grid">
+        <div class="field"><label>Induction date</label><input id="einduct" type="date" value="${e.inductionDate || ''}"/></div>
+        <div class="field"><label>EID received date</label><input id="eeidd" type="date" value="${e.eidDate || ''}"/></div>
+        <div class="field"><label>Licence received date</label><input id="edld" type="date" value="${e.dlDate || ''}"/></div>
       </div>
       <div class="section-label">Bank</div>
       <div class="form-grid">
@@ -2182,8 +2296,9 @@ async function saveEditEmp() {
       contact: gv('ec'), email: gv('ee'),
       position: gv('epos'), collar: gv('ecol'), department: gv('edept'), location: gv('eloc'),
       joiningDate: gv('ejd'), lineManager: gv('elm'), agencyName: gv('eag'),
-      visaStatus: gv('evis'), evisaExpiry: gv('eexp'),
-      eidNo: gv('eeid'), status: gv('estat'),
+      visaStatus: gv('evis'), evisaExpiry: gv('eexp'), passportExpiry: gv('epexp'),
+      eidNo: gv('eeid'), eidExpiry: gv('eeidexp'), laborCardExpiry: gv('elabexp'), licenseExpiry: gv('edlexp'), contractExpiry: gv('ecexp'),
+      inductionDate: gv('einduct'), eidDate: gv('eeidd'), dlDate: gv('edld'), status: gv('estat'),
       riderId: gv('erid'), deploymentDate: gv('edep'), medicalDate: gv('emed'), biometricDate: gv('ebio'),
       bankName: gv('ebank'), iban: gv('eiban'),
       ...Object.fromEntries((CFG.empFields || []).map(f => ['cf_' + f.key, gv('ecf_' + f.key)])),
@@ -2200,6 +2315,7 @@ async function saveEditEmp() {
 async function submitLeave() {
   const type = gv('lt'), fromDate = gv('lf'), toDate = gv('lt2'), reason = gv('lr');
   if (!fromDate || !toDate) { alert('Please select dates'); return; }
+  if (new Date(toDate) < new Date(fromDate)) { alert('Date error: the "To" date must be on or after the "From" date.'); return; }
   if (type.startsWith('Sick') && !document.getElementById('certfile')?.files[0]) {
     alert('Please upload a medical certificate for sick leave.'); return;
   }
