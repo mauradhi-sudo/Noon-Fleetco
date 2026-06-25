@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Noon Fleet HRMS</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjEwMCIgZmlsbD0iIzNFMThBOCIvPgogIDx0ZXh0IHg9IjEwMCIgeT0iOTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXNpemU9IjQ2IiBsZXR0ZXItc3BhY2luZz0iLTIiIGZpbGw9IiNGRkUxMDAiPm5vb248L3RleHQ+CiAgPHRleHQgeD0iMTAwIiB5PSIxNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXN0eWxlPSJpdGFsaWMiIGZvbnQtc2l6ZT0iNTAiIGxldHRlci1zcGFjaW5nPSIxIiBmaWxsPSIjRkZGRkZGIj5GTEVFVDwvdGV4dD4KPC9zdmc+Cg=="/>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.40.0/tabler-icons.min.css" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -515,6 +516,7 @@ async function loadData(force) {
     } else if (S.screen === 'employee') {
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
+      if (!S.documents     || force) S.documents     = await api('GET', '/documents');
       if (!S.notifications || force) S.notifications = await api('GET', '/notifications');
       if (!S.allocations   || force) S.allocations   = await api('GET', '/accommodation/allocations');
       if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) { S.assets = []; } }
@@ -536,6 +538,7 @@ async function requestOtp() {
     S.otpStep    = 'otp';
     S.otpSending = false;
     // In dev mode the OTP is returned in the response for testing
+    S.devOtp = res._devOtp || '';
     if (res._devOtp) {
       S.loginErr = '';
       console.log('DEV MODE — OTP:', res._devOtp);
@@ -584,6 +587,7 @@ async function doLogin() {
     S.empOtpStep  = 'otp';
     S.empOtpId    = id;
     S.empOtpEmail = res.email || '';
+    S.devOtp = res._devOtp || '';
     if (res._devOtp) console.log('DEV MODE — Employee OTP:', res._devOtp);
     R();
     setTimeout(() => { document.getElementById('emp-otp')?.focus(); }, 100);
@@ -657,8 +661,9 @@ function renderLogin() {
       </div>
       <div class="field">
         <label>6-digit login code</label>
-        <input id="otp-input" type="text" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:monospace"/>
+        <input id="otp-input" type="text" maxlength="6" placeholder="000000" autocomplete="one-time-code" value="${S.devOtp||''}" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:monospace"/>
       </div>
+      ${S.devOtp ? `<div style="background:#FAEEDA;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;color:#854F0B"><i class="ti ti-bulb"></i> Dev mode — code auto-filled: <b style="font-family:monospace;letter-spacing:1px">${S.devOtp}</b></div>` : ''}
       ${S.loginErr ? `<div class="error-msg"><i class="ti ti-alert-circle"></i> ${S.loginErr}</div>` : ''}
       <button class="btn-primary" onclick="verifyOtp()">Verify &amp; sign in <i class="ti ti-arrow-right"></i></button>
       <p class="auth-hint">Code expires in 10 minutes &nbsp;·&nbsp; <a href="#" onclick="requestOtp();return false" style="color:var(--green)">Resend code</a></p>`;
@@ -681,8 +686,9 @@ function renderLogin() {
       </div>
       <div class="field">
         <label>6-digit login code</label>
-        <input id="emp-otp" type="text" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:monospace"/>
+        <input id="emp-otp" type="text" maxlength="6" placeholder="000000" autocomplete="one-time-code" value="${S.devOtp||''}" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:monospace"/>
       </div>
+      ${S.devOtp ? `<div style="background:#FAEEDA;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;color:#854F0B"><i class="ti ti-bulb"></i> Dev mode — code auto-filled: <b style="font-family:monospace;letter-spacing:1px">${S.devOtp}</b></div>` : ''}
       ${S.loginErr ? `<div class="error-msg"><i class="ti ti-alert-circle"></i> ${S.loginErr}</div>` : ''}
       <button class="btn-primary" onclick="verifyEmpOtp()">Verify &amp; sign in <i class="ti ti-arrow-right"></i></button>
       <p class="auth-hint">Code expires in 10 minutes</p>`;
@@ -1745,8 +1751,21 @@ function renderPersonalTab(e) {
     <div class="info-cell"><div class="lbl">Date of birth</div><div class="val">${fmtDate(e.dob)||'—'}</div></div>
     <div class="info-cell"><div class="lbl">Gender</div><div class="val">${fmt(e.gender)}</div></div>
     <div class="info-cell"><div class="lbl">Nationality</div><div class="val">${fmt(e.nationality)}</div></div>
+    <div class="info-cell"><div class="lbl">Religion</div><div class="val">${fmt(e.religion)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Marital status</div><div class="val">${fmt(e.maritalStatus)||'—'}</div></div>
     <div class="info-cell"><div class="lbl">Contact</div><div class="val">${fmt(e.contact)}</div></div>
     <div class="info-cell"><div class="lbl">Email</div><div class="val">${fmt(e.email)}</div></div>
+  </div>
+  <div class="sec-head"><div class="sec-ico"><i class="ti ti-urgent"></i></div><h4>Emergency Contact</h4></div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Contact name</div><div class="val">${fmt(e.emergencyName)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Contact phone</div><div class="val">${fmt(e.emergencyPhone)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Relationship</div><div class="val">${fmt(e.emergencyRelation)||'—'}</div></div>
+  </div>
+  <div class="sec-head"><div class="sec-ico"><i class="ti ti-map-pin"></i></div><h4>Address</h4></div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Current / temporary address</div><div class="val">${fmt(e.currentAddress)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Permanent / home address</div><div class="val">${fmt(e.permanentAddress)||'—'}</div></div>
   </div>`;
 }
  
@@ -2147,6 +2166,8 @@ function renderEmpSelfProfile(emp, prob) {
   <div class="info-grid">
     <div class="info-cell"><div class="lbl">Passport</div><div class="val" style="font-family:monospace">${fmt(emp.passportNo)}</div></div>
     <div class="info-cell"><div class="lbl">Nationality</div><div class="val">${fmt(emp.nationality)}</div></div>
+    <div class="info-cell"><div class="lbl">Religion</div><div class="val">${fmt(emp.religion)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Marital status</div><div class="val">${fmt(emp.maritalStatus)||'—'}</div></div>
     <div class="info-cell"><div class="lbl">Contact</div><div class="val">${fmt(emp.contact)}</div></div>
     <div class="info-cell"><div class="lbl">Email</div><div class="val">${fmt(emp.email)}</div></div>
     <div class="info-cell"><div class="lbl">Line manager</div><div class="val">${fmt(emp.lineManager)||'—'}</div></div>
@@ -2157,6 +2178,17 @@ function renderEmpSelfProfile(emp, prob) {
     <div class="info-cell"><div class="lbl">NUB / Working at</div><div class="val" style="font-size:11px">${fmt(emp.orgUnit)||fmt(emp.location)}</div></div>
     <div class="info-cell"><div class="lbl">Deployment date</div><div class="val">${fmtDate(emp.deploymentDate)||'—'}</div></div>
     <div class="info-cell"><div class="lbl">Bank / IBAN</div><div class="val" style="font-size:11px">${fmt(emp.bankName)||'—'}${emp.iban ? ' · ' + emp.iban : ''}</div></div>
+  </div>
+  <div class="sec-head"><div class="sec-ico"><i class="ti ti-urgent"></i></div><h4>Emergency Contact</h4></div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Contact name</div><div class="val">${fmt(emp.emergencyName)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Contact phone</div><div class="val">${fmt(emp.emergencyPhone)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Relationship</div><div class="val">${fmt(emp.emergencyRelation)||'—'}</div></div>
+  </div>
+  <div class="sec-head"><div class="sec-ico"><i class="ti ti-map-pin"></i></div><h4>Address</h4></div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Current / temporary address</div><div class="val">${fmt(emp.currentAddress)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Permanent / home address</div><div class="val">${fmt(emp.permanentAddress)||'—'}</div></div>
   </div>
   ${renderEmpAccSection(emp)}
   ${renderEmpAssetsSelf(emp)}`;
@@ -2252,11 +2284,10 @@ function renderEmpDocsTab(docs) {
   return `<div class="card">
     <div class="card-head">
       <h3>My documents <span style="font-weight:500;color:var(--muted);font-size:12px">· ${required}/${cats.length} key docs on file</span></h3>
-      <button class="btn g" onclick="uploadDocFor('','uploadDocSelf')"><i class="ti ti-upload"></i> Upload</button>
     </div>
     <div class="card-body">
-      <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>Tap any document below to open it. Rows marked <i>Not uploaded yet</i> still need a file — use Upload to add yours.</div></div>
-      ${docChecklist(docs, { isAdmin: false, uploadModal: 'uploadDocSelf' })}
+      <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>Tap any document to open it. Your documents are uploaded and managed by HR — contact them if something is missing or needs updating.</div></div>
+      ${docChecklist(docs, { isAdmin: false, canUpload: false, uploadModal: 'uploadDocSelf' })}
     </div>
   </div>`;
 }
@@ -2435,8 +2466,18 @@ function renderEditEmpModal() {
         <div class="field"><label>Last name</label><input id="el" value="${e.lastName || ''}"/></div>
         <div class="field"><label>Gender</label><select id="eg"><option value="" ${sel(e.gender, '')}>—</option><option ${sel(e.gender, 'Male')}>Male</option><option ${sel(e.gender, 'Female')}>Female</option></select></div>
         <div class="field"><label>Nationality</label><input id="enat" value="${e.nationality || ''}"/></div>
+        <div class="field"><label>Religion</label><input id="erel" value="${e.religion || ''}"/></div>
+        <div class="field"><label>Marital status</label><select id="emar"><option value="" ${sel(e.maritalStatus, '')}>—</option><option ${sel(e.maritalStatus, 'Single')}>Single</option><option ${sel(e.maritalStatus, 'Married')}>Married</option><option ${sel(e.maritalStatus, 'Divorced')}>Divorced</option><option ${sel(e.maritalStatus, 'Widowed')}>Widowed</option></select></div>
         <div class="field"><label>Contact</label><input id="ec" value="${e.contact || ''}"/></div>
         <div class="field full"><label>Email</label><input id="ee" value="${e.email || ''}"/></div>
+      </div>
+      <div class="section-label">Emergency contact &amp; address</div>
+      <div class="form-grid">
+        <div class="field"><label>Emergency contact name</label><input id="eemn" value="${e.emergencyName || ''}"/></div>
+        <div class="field"><label>Emergency contact phone</label><input id="eemp" value="${e.emergencyPhone || ''}"/></div>
+        <div class="field"><label>Relationship</label><input id="eemr" value="${e.emergencyRelation || ''}"/></div>
+        <div class="field full"><label>Current / temporary address</label><textarea id="ecur" rows="2">${e.currentAddress || ''}</textarea></div>
+        <div class="field full"><label>Permanent / home address</label><textarea id="eperm" rows="2">${e.permanentAddress || ''}</textarea></div>
       </div>
       <div class="section-label">Employment</div>
       <div class="form-grid">
@@ -2502,6 +2543,8 @@ function renderLeaveModal() {
           <option>Annual Leave</option><option>Sick Leave (Full)</option><option>Sick Leave (Half Pay)</option>
           <option>Sick Leave (Unpaid)</option><option>Emergency Leave</option><option>Unpaid Leave</option>
           <option>Maternity Leave</option><option>Paternity Leave</option>
+          <option>Compassionate Leave</option><option>Cultural Leave</option>
+          <option>Marriage Leave</option><option>Hajj / Pilgrimage Leave</option>
         </select>
       </div>
       <div class="field"><label>From date</label><input id="lf" type="date"/></div>
@@ -2635,6 +2678,9 @@ async function saveEditEmp() {
     await api('PUT', `/employees/${S.viewEmp.id}`, {
       name: gv('en'), firstName: gv('ef'), lastName: gv('el'), gender: gv('eg'),
       passportNo: gv('ep'), nationality: gv('enat'),
+      religion: gv('erel'), maritalStatus: gv('emar'),
+      emergencyName: gv('eemn'), emergencyPhone: gv('eemp'), emergencyRelation: gv('eemr'),
+      currentAddress: gv('ecur'), permanentAddress: gv('eperm'),
       contact: gv('ec'), email: gv('ee'),
       position: gv('epos'), collar: gv('ecol'), department: gv('edept'), location: gv('eloc'),
       joiningDate: gv('ejd'), lineManager: gv('elm'), agencyName: gv('eag'),
@@ -3427,7 +3473,7 @@ function renderAccAllocations(manage) {
     <div class="card-head">
       <h3>Bed Allocation</h3>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-        <input id="accsrch" value="${S.accSearch || ''}" placeholder="Search employee, camp, room…"
+        <input id="accsrch" value="${S.accSearch || ''}" placeholder="Search employee name / ID, camp, room…"
                oninput="S.accSearch=this.value;R();var el=document.getElementById('accsrch');if(el){el.focus();el.setSelectionRange(this.value.length,this.value.length);}"
                style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px"/>
         ${manage ? `<button class="btn g" onclick="openAssignModal('')"><i class="ti ti-plus"></i> Assign bed</button>` : ''}
@@ -4022,9 +4068,9 @@ function renderAssetTable(type, manage, assign) {
     <div class="card-head">
       <h3>${type === 'bike' ? 'Bike Master' : type === 'sim' ? 'SIM Master' : 'Other Assets'}</h3>
       <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-        <input id="assetsrch" value="${S.assetSearch || ''}" placeholder="Search…"
+        <input id="assetsrch" value="${S.assetSearch || ''}" placeholder="${type==='bike'?'Search bike no. / plate, employee name or ID…':'Search asset, employee name or ID…'}"
                oninput="S.assetSearch=this.value;R();var el=document.getElementById('assetsrch');if(el){el.focus();el.setSelectionRange(this.value.length,this.value.length);}"
-               style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:170px"/>
+               style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:260px"/>
         <select onchange="S.assetStatusFilter=this.value;R()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
           <option value="">All statuses</option>
           ${assetStatuses(type).map(s => `<option value="${s}" ${sf === s ? 'selected' : ''}>${s}</option>`).join('')}
