@@ -24,13 +24,20 @@
   --amber:       #EF9F27;
   --blue:        #378ADD;
   /* Surfaces */
-  --bg:      #f5f5f3;
+  --bg:      #f6f7f6;
   --surface: #fff;
-  --border:  rgba(0,0,0,0.1);
+  --border:  rgba(15,30,25,0.09);
+  --border-strong: rgba(15,30,25,0.14);
+  --hover:   #f7f9f8;
   /* Text */
-  --text:  #1a1a1a;
-  --muted: #666;
-  --faint: #999;
+  --text:  #16201c;
+  --muted: #687872;
+  --faint: #9aa6a1;
+  /* Depth + shape */
+  --shadow-sm: 0 1px 2px rgba(16,40,30,.05);
+  --shadow:    0 2px 10px rgba(16,40,30,.06), 0 1px 2px rgba(16,40,30,.05);
+  --shadow-lg: 0 12px 36px rgba(16,40,30,.12);
+  --r-sm: 8px; --r: 12px; --r-lg: 16px;
 }
  
 body{
@@ -105,13 +112,13 @@ body{
  
 /* ─── Avatar ──────────────────────────────────────────────── */
 .avatar{width:32px;height:32px;border-radius:50%;background:#9FE1CB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#085041;flex-shrink:0}
-.avatar.lg{width:56px;height:56px;font-size:18px}
+.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#B8ECDA,#9FE1CB);box-shadow:inset 0 0 0 1px rgba(8,80,65,.08)}
  
 /* ─── Cards ───────────────────────────────────────────────── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1.1rem}
-.card-head{padding:.9rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-head h3{font-size:14px;font-weight:600}
-.card-body{padding:1.25rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow-sm)}
+.card-head{padding:1rem 1.35rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h3{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.card-body{padding:1.35rem}
  
 /* ─── Stats Row ───────────────────────────────────────────── */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem}
@@ -148,27 +155,44 @@ tr:hover td{background:#fafaf8}
 .modal-foot{padding:.9rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-grid .full{grid-column:1/-1}
-.section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:1.1rem 0 .7rem;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:1.4rem 0 .7rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.sec-head{display:flex;align-items:center;gap:9px;margin:1.5rem 0 .85rem}
+.sec-head .sec-ico{width:30px;height:30px;border-radius:9px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sec-head h4{font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--text)}
  
 /* ─── Leave Bars ──────────────────────────────────────────── */
 .leave-bar{height:6px;border-radius:3px;background:#f0f0ee;overflow:hidden;margin-top:5px}
 .leave-fill{height:100%;border-radius:3px;background:var(--green)}
 .leave-fill.amber{background:var(--amber)}
 .leave-fill.red{background:var(--red)}
+.leave-hero{display:flex;align-items:center;gap:1.5rem;background:linear-gradient(135deg,var(--green-light),#fff);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.4rem 1.6rem;margin-bottom:1.1rem;box-shadow:var(--shadow-sm)}
+.leave-hero .big{font-size:42px;font-weight:800;letter-spacing:-.03em;color:var(--green-dark);line-height:1}
+.leave-hero .big small{font-size:13px;font-weight:600;color:var(--muted);display:block;margin-top:4px;letter-spacing:0}
+.leave-hero .lh-divider{width:1px;align-self:stretch;background:var(--border)}
+.leave-hero .lh-stat{font-size:12px;color:var(--muted)}
+.leave-hero .lh-stat b{display:block;font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px}
 .ltcard{background:#fafaf8;border:1px solid var(--border);border-radius:9px;padding:.875rem;margin-bottom:8px}
 .ltcard h4{font-size:12px;font-weight:600;margin-bottom:6px}
 .lt-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
  
 /* ─── Profile ─────────────────────────────────────────────── */
-.profile-header{display:flex;align-items:center;gap:1.25rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
-.profile-meta{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:6px}
-.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.info-cell{background:#fafaf8;border-radius:8px;padding:.875rem}
-.info-cell .lbl{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:3px;text-transform:uppercase}
-.info-cell .val{font-size:13px;font-weight:500;word-break:break-all}
-.tabs-bar{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:1.25rem}
-.tab-btn{padding:7px 14px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:500}
+.profile-header{position:relative;display:flex;align-items:center;gap:1.35rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem 1.6rem;margin-bottom:1.35rem;box-shadow:var(--shadow);overflow:hidden}
+.profile-header::before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(180deg,var(--green),var(--green-dark))}
+.profile-name{font-size:20px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.profile-name .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-light)}
+.profile-meta{display:flex;gap:18px;font-size:12.5px;color:var(--muted);flex-wrap:wrap;margin-top:8px}
+.profile-meta span{display:inline-flex;align-items:center;gap:5px}
+.profile-meta i{font-size:14px;color:var(--faint)}
+.profile-aside{margin-left:auto;text-align:right;font-size:12px;color:var(--muted);line-height:1.7;flex-shrink:0}
+.profile-aside .empno{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.info-cell{background:var(--surface);padding:1rem 1.1rem}
+.info-cell .lbl{font-size:10.5px;color:var(--faint);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.info-cell .val{font-size:13.5px;font-weight:500;word-break:break-word;color:var(--text);line-height:1.4}
+.tabs-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:1.35rem;overflow-x:auto}
+.tab-btn{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color .12s,border-color .12s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
  
 /* ─── Payslip PDF ─────────────────────────────────────────── */
 .ps-pdf{background:#fff;color:#000;font-family:Arial,sans-serif;max-width:720px;border:1px solid #ccc;margin:0 auto;border-radius:4px;overflow:hidden}
@@ -242,7 +266,10 @@ tr:hover td{background:#fafaf8}
   .tbl-wrap table{min-width:760px}
   .info-grid,.form-grid{grid-template-columns:1fr}
   .form-grid .full{grid-column:auto}
-  .profile-header{flex-direction:column;align-items:flex-start;gap:.75rem}
+  .profile-header{flex-direction:column;align-items:flex-start;gap:.85rem}
+  .profile-aside{margin-left:0;text-align:left}
+  .leave-hero{flex-wrap:wrap;gap:1rem}
+  .leave-hero .lh-divider{display:none}
   .import-steps{flex-wrap:wrap}.imp-step{min-width:46%;border-bottom:1px solid var(--border)}
   .topbar-actions{flex-wrap:wrap;gap:6px;justify-content:flex-end}
   .modal{max-width:96vw}
@@ -1611,22 +1638,28 @@ function renderEmpDetail() {
   const prob = isInProb(e);
   const tab  = S.profileTab;
  
+  const joinedStr = e.joiningDate ? new Date(e.joiningDate).toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) : '';
   return `<div class="profile-header">
     <div class="avatar lg" style="${e.status==='Inactive'?'opacity:0.4':''}">${getInit(e.name)}</div>
-    <div style="flex:1">
-      <div style="font-size:17px;font-weight:700;margin-bottom:4px">${e.name}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px">
+    <div style="flex:1;min-width:0">
+      <div class="profile-name">${e.status==='Active'?'<span class="live-dot"></span>':''}${e.name}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 2px">
         <span class="badge ${e.status==='Active'?'bg':e.status==='Inactive'?'br':'bgr'}">${e.status}</span>
         ${prob ? `<span class="badge ba">Probation (${Math.ceil((182-(new Date()-new Date(e.joiningDate))/864e5)/7)}w left)</span>` : ''}
-        <span class="badge ${e.collar==='Blue collar'?'bb':'ba'}">${e.collar}</span>
-        <span class="badge bgr">${e.position}</span>
+        ${e.collar ? `<span class="badge ${e.collar==='Blue collar'?'bb':'ba'}">${e.collar}</span>` : ''}
+        ${e.position ? `<span class="badge bgr">${e.position}</span>` : ''}
       </div>
       <div class="profile-meta">
-        <span><i class="ti ti-id-badge"></i> ${e.empId}</span>
-        <span><i class="ti ti-map-pin"></i> ${e.location}</span>
-        <span><i class="ti ti-mail"></i> ${e.email}</span>
+        <span><i class="ti ti-id-badge"></i> ${e.empId||'—'}</span>
+        ${e.location ? `<span><i class="ti ti-map-pin"></i> ${e.location}</span>` : ''}
+        ${e.email ? `<span><i class="ti ti-mail"></i> ${e.email}</span>` : ''}
       </div>
     </div>
+    ${joinedStr ? `<div class="profile-aside">
+      <div class="empno">${e.empId||''}</div>
+      <div><i class="ti ti-calendar-check" style="font-size:13px;color:var(--green)"></i> Joined ${joinedStr}</div>
+      ${e.department ? `<div style="color:var(--faint)">${e.department}</div>` : ''}
+    </div>` : ''}
   </div>
   ${e.status==='Inactive' ? `<div class="alert alert-e"><i class="ti ti-user-off"></i>Employee is inactive — cannot log in or apply for leaves.</div>` : ''}
   ${prob && e.status==='Active' ? `<div class="probation-bar"><i class="ti ti-clock"></i>On probation — leave applications restricted until 6 months from ${fmtDate(e.joiningDate)}.</div>` : ''}
@@ -1645,7 +1678,8 @@ function renderEmpDetail() {
 }
  
 function renderPersonalTab(e) {
-  return `<div class="info-grid">
+  return `<div class="sec-head"><div class="sec-ico"><i class="ti ti-user"></i></div><h4>Basic Information</h4></div>
+  <div class="info-grid">
     <div class="info-cell"><div class="lbl">Full name</div><div class="val">${fmt(e.name)}</div></div>
     <div class="info-cell"><div class="lbl">First / Last</div><div class="val">${fmt(e.firstName)} ${fmt(e.lastName)}</div></div>
     <div class="info-cell"><div class="lbl">Father's name</div><div class="val">${fmt(e.fatherName)||'—'}</div></div>
@@ -1658,7 +1692,8 @@ function renderPersonalTab(e) {
 }
  
 function renderPassportTab(e) {
-  return `<div class="info-grid">
+  return `<div class="sec-head"><div class="sec-ico"><i class="ti ti-id"></i></div><h4>Visa &amp; Identification</h4></div>
+  <div class="info-grid">
     <div class="info-cell"><div class="lbl">Passport number</div><div class="val" style="font-family:monospace">${fmt(e.passportNo)}</div></div>
     <div class="info-cell"><div class="lbl">Visa status</div><div class="val">${fmt(e.visaStatus)}</div></div>
     <div class="info-cell"><div class="lbl">E-visa expiry</div><div class="val">${fmtDate(e.evisaExpiry)||'—'}</div></div>
@@ -1672,7 +1707,8 @@ function renderEmploymentTab(e) {
   const probEnd = e.joiningDate
     ? fmtDate(new Date(new Date(e.joiningDate).getTime() + 182 * 864e5).toISOString().split('T')[0])
     : '—';
-  return `<div class="info-grid">
+  return `<div class="sec-head"><div class="sec-ico"><i class="ti ti-briefcase"></i></div><h4>Employment</h4></div>
+  <div class="info-grid">
     <div class="info-cell"><div class="lbl">Employee ID</div><div class="val">${fmt(e.empId)}</div></div>
     <div class="info-cell"><div class="lbl">Position</div><div class="val">${fmt(e.position)}</div></div>
     <div class="info-cell"><div class="lbl">Department</div><div class="val">${fmt(e.department)||'—'}</div></div>
@@ -1967,22 +2003,28 @@ function renderEmpPortal() {
  
 function renderEmpSelfProfile(emp, prob) {
   if (!emp) return `<div class="loading"><i class="ti ti-loader"></i>Loading…</div>`;
+  const joinedStr = emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) : '';
   return `<div class="profile-header">
     <div class="avatar lg">${getInit(emp.name)}</div>
-    <div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:4px">${emp.name}</div>
-      <div style="display:flex;gap:5px;margin-bottom:5px">
-        <span class="badge bg">${emp.status}</span>
+    <div style="flex:1;min-width:0">
+      <div class="profile-name">${emp.status==='Active'?'<span class="live-dot"></span>':''}${emp.name}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 2px">
+        <span class="badge ${emp.status==='Active'?'bg':'bgr'}">${emp.status}</span>
         ${prob ? `<span class="badge ba">Probation</span>` : ''}
-        <span class="badge bgr">${emp.position}</span>
+        ${emp.position ? `<span class="badge bgr">${emp.position}</span>` : ''}
       </div>
       <div class="profile-meta">
-        <span><i class="ti ti-id-badge"></i> ${emp.empId}</span>
-        <span><i class="ti ti-map-pin"></i> ${emp.location}</span>
+        <span><i class="ti ti-id-badge"></i> ${emp.empId||'—'}</span>
+        ${emp.location ? `<span><i class="ti ti-map-pin"></i> ${emp.location}</span>` : ''}
       </div>
     </div>
+    ${joinedStr ? `<div class="profile-aside">
+      <div class="empno">${emp.empId||''}</div>
+      <div><i class="ti ti-calendar-check" style="font-size:13px;color:var(--green)"></i> Joined ${joinedStr}</div>
+    </div>` : ''}
   </div>
   ${prob ? `<div class="probation-bar"><i class="ti ti-clock"></i>You are on probation — leave applications locked for the first 6 months.</div>` : ''}
+  <div class="sec-head"><div class="sec-ico"><i class="ti ti-user"></i></div><h4>Basic Information</h4></div>
   <div class="info-grid">
     <div class="info-cell"><div class="lbl">Passport</div><div class="val" style="font-family:monospace">${fmt(emp.passportNo)}</div></div>
     <div class="info-cell"><div class="lbl">Nationality</div><div class="val">${fmt(emp.nationality)}</div></div>
@@ -2016,7 +2058,16 @@ function renderEmpLeavesTab(emp, leaves, bal, prob) {
   if (!emp) return `<div class="loading"><i class="ti ti-loader"></i>Loading…</div>`;
   const al  = bal.al; const sl = bal.sl;
   const pct = v => Math.min(100, Math.round((v.used / Math.max(v.total, 1)) * 100));
-  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
+  return `<div class="leave-hero">
+    <div class="big">${al.balance}<small>Annual leave available</small></div>
+    <div class="lh-divider"></div>
+    <div class="lh-stat"><b>${al.total}</b>Accrued of 26</div>
+    <div class="lh-divider"></div>
+    <div class="lh-stat"><b>${al.used}</b>Days used</div>
+    <div class="lh-divider"></div>
+    <div class="lh-stat"><b>${sl.full.balance}</b>Sick (full pay) left</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
     <div class="ltcard" style="grid-column:1/-1">
       <h4>Annual Leave · ${al.months} months service</h4>
       <div class="lt-meta"><span>${al.total} accrued of 26</span><span>${al.used} used · <b>${al.balance} remaining</b></span></div>
