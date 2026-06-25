@@ -1543,13 +1543,19 @@ function renderDocsPage() {
   </div>`;
 }
  
+/* Match a document to an employee. Primary: stored employeeId === internal id.
+   Fallback: the employee NUMBER embedded in the stored file path (e.g. 'employee/17812/x.pdf'),
+   which stays stable even if the internal id changed after a roster re-import. */
+function docEmpNo(d) { const f = String((d && d.filename) || ''); if (!f.includes('/')) return ''; const parts = f.split('/').filter(Boolean); return parts.length >= 2 ? parts[parts.length - 2] : ''; }
+function docBelongsTo(d, emp) { if (!emp || !d) return false; if (d.employeeId === emp.id) return true; const no = docEmpNo(d); return !!no && !!emp.empId && no.toUpperCase() === String(emp.empId).toUpperCase(); }
+
 /* ─── Employee Detail (admin) ──────────────────────────────── */
 function renderEmpDetail() {
   const e = S.viewEmp;
   if (!e) return '';
   const myLeaves   = (S.leaves    || []).filter(l => l.employeeId === e.id);
   const myPayslips = (S.payslips  || []).filter(p => p.employeeId === e.id);
-  const myDocs     = (S.documents || []).filter(d => d.employeeId === e.id);
+  const myDocs     = (S.documents || []).filter(d => docBelongsTo(d, e));
   const bal  = getLeaveBal(myLeaves, e.joiningDate);
   const prob = isInProb(e);
   const tab  = S.profileTab;
@@ -1838,7 +1844,7 @@ function renderEmpPortal() {
   const meId       = S.viewEmp?.id;
   const myLeaves   = (S.leaves        || []).filter(l => l.employeeId === meId);
   const myPayslips = (S.payslips      || []).filter(p => p.employeeId === meId);
-  const myDocs     = (S.documents     || []).filter(d => d.employeeId === meId);
+  const myDocs     = (S.documents     || []).filter(d => docBelongsTo(d, S.viewEmp));
   const myNotifs   = (S.notifications || []).filter(n => n.employeeId === meId);
   const unread     = myNotifs.filter(n => !n.isRead).length;
   const emp        = S.viewEmp;
