@@ -1609,13 +1609,14 @@ async function bulkDocUpload(files) {
   R();
 }
  
-function docFileIcon(type) {
-  if (!type) return 'ti-file-description';
-  const t = String(type).toLowerCase();
-  if (t.includes('pdf')) return 'ti-file-type-pdf';
-  if (t.includes('image') || t.includes('jpg') || t.includes('jpeg') || t.includes('png')) return 'ti-photo';
-  if (t.includes('word') || t.includes('docx')) return 'ti-file-type-doc';
-  if (t.includes('excel') || t.includes('xlsx') || t.includes('csv')) return 'ti-file-type-xls';
+function docFileIcon(typeOrDoc) {
+  // Accepts a doc object (preferred — uses the filename extension) or a type/mime string.
+  const d = (typeOrDoc && typeof typeOrDoc === 'object') ? typeOrDoc : null;
+  const hay = (d ? `${d.filename || ''} ${d.type || ''} ${d.name || ''}` : String(typeOrDoc || '')).toLowerCase();
+  if (hay.includes('pdf')) return 'ti-file-type-pdf';
+  if (/(image|jpg|jpeg|png|webp|heic)/.test(hay)) return 'ti-photo';
+  if (/(word|docx|\.doc)/.test(hay)) return 'ti-file-type-doc';
+  if (/(excel|xlsx|\.xls|csv)/.test(hay)) return 'ti-file-type-xls';
   return 'ti-file-description';
 }
 function docReviewBadge(status) {
@@ -1647,7 +1648,7 @@ function renderDocsPage() {
         ${canUp ? `
         <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-folder-up"></i> Bulk upload</button>
         <input type="file" id="bulkdocs" webkitdirectory multiple style="display:none" onchange="bulkDocUpload(this.files)">
-        <button class="btn g" onclick="openModal('uploadDoc')"><i class="ti ti-upload"></i> Upload</button>` : ''}
+        <button class="btn g" onclick="uploadDocFor('','uploadDoc')"><i class="ti ti-upload"></i> Upload</button>` : ''}
       </div>
     </div>
     <div style="padding:.75rem 1.25rem;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
@@ -1660,7 +1661,7 @@ function renderDocsPage() {
       ? `<p style="text-align:center;padding:2rem;color:var(--muted)">No documents${f!=='all'?' in this category':''}.</p>`
       : docs.map(d => `<div class="doc-item">
           <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
-            <i class="ti ${docFileIcon(d.type)}"></i>
+            <i class="ti ${docFileIcon(d)}"></i>
           </div>
           <div style="flex:1;min-width:0;margin-left:10px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
@@ -1669,17 +1670,7 @@ function renderDocsPage() {
             </div>
             <span style="font-size:11px;color:var(--muted)">${d.empName ? `<b>${d.empName}</b> · ` : ''}${d.type||'—'} · ${fmtDate(d.uploadedAt)}${d.reviewedBy ? ` · reviewed by ${d.reviewedBy}` : ''}</span>
           </div>
-          <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
-            ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
-            ${canReviewDocs() ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
-              <option value="">Review…</option>
-              <option value="Approved">✓ Approve</option>
-              <option value="Reviewed">👁 Mark Reviewed</option>
-              <option value="Rejected">✗ Reject</option>
-              <option value="Pending">↺ Reset</option>
-            </select>` : ''}
-            ${canUp ? `<button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
-          </div>
+          ${docActions(d, true)}
         </div>`).join('')}
     </div>
   </div>`;
@@ -1900,20 +1891,7 @@ function docMatchesCat(d, cat) {
 }
 function canManageDocTypes() { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('manage_settings'); }
 function canReviewDocs() { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_documents') || (S.user?.permissions||[]).includes('review_documents'); }
-function docRowActions(d, isAdmin) {
-  const canDelete = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_documents');
-  return `<div class="doc-actions" onclick="event.stopPropagation()">
-    ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="Open / download"><i class="ti ti-eye"></i> Open</button>` : ''}
-    ${isAdmin && canReviewDocs() ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" title="Review" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
-      <option value="">Review…</option>
-      <option value="Approved">✓ Approve</option>
-      <option value="Reviewed">👁 Mark reviewed</option>
-      <option value="Rejected">✗ Reject</option>
-      <option value="Pending">↺ Reset</option>
-    </select>` : ''}
-    ${isAdmin && canDelete ? `<button class="btn sm" style="color:var(--red)" title="Delete" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
-  </div>`;
-}
+function docRowActions(d, isAdmin) { return docActions(d, isAdmin); }
 // The reusable checklist: one row per standard document type, plus any extra uploads under "Other".
 function docChecklist(docs, opts) {
   const isAdmin = !!opts.isAdmin;
@@ -1938,13 +1916,13 @@ function docChecklist(docs, opts) {
         <div class="doc-type" style="color:var(--muted)">${cat.label}</div>
         <div class="doc-sub missing">Not uploaded yet</div>
       </div>
-      <div class="doc-actions">${canUpload ? `<button class="btn sm b" onclick="openModal('${opts.uploadModal}')"><i class="ti ti-upload"></i> Upload</button>` : `<span class="badge bgr" style="font-size:10px">Missing</span>`}</div>
+      <div class="doc-actions">${canUpload ? `<button class="btn sm b" onclick="uploadDocFor('${cat.label.replace(/'/g,"\\'")}','${opts.uploadModal}')"><i class="ti ti-upload"></i> Upload</button>` : `<span class="badge bgr" style="font-size:10px">Missing</span>`}</div>
     </div>`;
   }).join('');
   const extras = docs.filter(x => !used.has(x.id));
   const extraRows = extras.length ? `<div class="section-label" style="margin-top:1.2rem">Other documents</div>` + extras.map(d => `
     <div class="doc-row have" onclick="viewDoc('${d.id}')">
-      <div class="doc-ico have"><i class="ti ${docFileIcon(d.type)}"></i></div>
+      <div class="doc-ico have"><i class="ti ${docFileIcon(d)}"></i></div>
       <div class="doc-main">
         <div class="doc-type">${d.name} ${docReviewBadge(d.reviewStatus)}</div>
         <div class="doc-sub">${d.type || 'Document'} · uploaded ${fmtDate(d.uploadedAt)}${d.uploader ? ` by ${d.uploader}` : ''}</div>
@@ -1962,7 +1940,7 @@ function renderDocumentsTab(docs, empId, isAdmin) {
       <h3>Documents <span style="font-weight:500;color:var(--muted);font-size:12px">· ${required}/${cats.length} key docs on file</span></h3>
       <div style="display:flex;gap:7px">
         ${canManageDocTypes() ? `<button class="btn" onclick="addDocField()"><i class="ti ti-plus"></i> Add field</button>` : ''}
-        <button class="btn g" onclick="openModal('uploadDocEmp')"><i class="ti ti-upload"></i> Upload</button>
+        <button class="btn g" onclick="uploadDocFor('','uploadDocEmp')"><i class="ti ti-upload"></i> Upload</button>
       </div>
     </div>
     <div class="card-body">${docChecklist(docs, { isAdmin, uploadModal: 'uploadDocEmp' })}</div>
@@ -2274,7 +2252,7 @@ function renderEmpDocsTab(docs) {
   return `<div class="card">
     <div class="card-head">
       <h3>My documents <span style="font-weight:500;color:var(--muted);font-size:12px">· ${required}/${cats.length} key docs on file</span></h3>
-      <button class="btn g" onclick="openModal('uploadDocSelf')"><i class="ti ti-upload"></i> Upload</button>
+      <button class="btn g" onclick="uploadDocFor('','uploadDocSelf')"><i class="ti ti-upload"></i> Upload</button>
     </div>
     <div class="card-body">
       <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>Tap any document below to open it. Rows marked <i>Not uploaded yet</i> still need a file — use Upload to add yours.</div></div>
@@ -2557,10 +2535,10 @@ function renderDocModal() {
       ${isAdmin ? `<div class="field full"><label>Employee</label>
         <select id="de">${(S.employees||[]).map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}</select>
       </div>` : ''}
-      <div class="field"><label>Document name</label><input id="dn" placeholder="e.g. Passport Copy"/></div>
+      <div class="field"><label>Document name</label><input id="dn" value="${S.docUploadType || ''}" placeholder="e.g. Passport Copy"/></div>
       <div class="field"><label>Type</label><select id="dtype">
-        ${allDocCategories().map(c => `<option>${c.label}</option>`).join('')}
-        <option>Certificate</option><option>Other</option>
+        ${allDocCategories().map(c => `<option ${S.docUploadType===c.label?'selected':''}>${c.label}</option>`).join('')}
+        <option ${S.docUploadType==='Certificate'?'selected':''}>Certificate</option><option ${S.docUploadType==='Other'?'selected':''}>Other</option>
       </select></div>
       <div class="field full">
         <div class="upload-zone" style="padding:1.25rem" onclick="document.getElementById('docfile').click()">
@@ -2725,23 +2703,25 @@ async function decideLeave(id, decision) {
  
 async function saveDoc() {
   const file = document.getElementById('docfile')?.files[0];
+  if (!file) { alert('Please choose a file first.'); return; }
   const fd   = new FormData();
-  fd.append('name', gv('dn') || 'Document');
+  fd.append('name', gv('dn') || gv('dtype') || 'Document');
   fd.append('type', gv('dtype') || 'Other');
+  // Link the upload to the right employee: explicit picker (global page) or the open profile.
   if (S.modal === 'uploadDoc') fd.append('employeeId', gv('de'));
-  if (file) fd.append('file', file);
+  else if (S.modal === 'uploadDocEmp' && S.viewEmp) fd.append('employeeId', S.viewEmp.id);
+  // (uploadDocSelf → server uses the logged-in employee automatically)
+  fd.append('file', file);
   try {
     await api('POST', '/documents', fd, true);
-    if (S.screen === 'admin') S.documents = await api('GET', '/documents');
-    else {
-      // refresh employee's own docs
-      const empDocs = await api('GET', '/documents');
-      S.documents = empDocs;
-    }
+    S.documents = await api('GET', '/documents');
+    S.docUploadType = null;
     S.modal = null;
     R();
   } catch (e) { alert('Error: ' + e.message); }
 }
+// Open the upload modal pre-set to a specific document slot (so it lands in the right place).
+function uploadDocFor(type, modal) { S.docUploadType = type; openModal(modal); }
  
 async function deleteDoc(id) {
   if (!confirm('Delete this document?')) return;
@@ -2757,6 +2737,47 @@ async function reviewDoc(id, status) {
     S.documents = await api('GET', '/documents');
     R();
   } catch (e) { alert('Error: ' + e.message); }
+}
+// Clear Approve / Reject buttons. Once decided, shows the decision + a reset control.
+function reviewControls(d) {
+  if (!canReviewDocs()) return '';
+  const s = d.reviewStatus || 'Pending';
+  if (s === 'Approved' || s === 'Rejected') {
+    return `<button class="btn sm" title="Reset to pending" onclick="reviewDoc('${d.id}','Pending')"><i class="ti ti-rotate-2"></i></button>`;
+  }
+  return `<button class="btn sm" style="background:#EAF3DE;color:#3B6D11;border:none" title="Approve" onclick="reviewDoc('${d.id}','Approved')"><i class="ti ti-check"></i> Approve</button>
+    <button class="btn sm" style="background:#FCEBEB;color:#A32D2D;border:none" title="Reject" onclick="reviewDoc('${d.id}','Rejected')"><i class="ti ti-x"></i> Reject</button>`;
+}
+// Replace the file on an existing document (upload new, then remove the old record).
+function replaceDoc(id) {
+  const d = (S.documents || []).find(x => x.id === id); if (!d) return;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.pdf,.jpg,.jpeg,.png,.docx';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('name', d.name || 'Document');
+      fd.append('type', d.type || 'Other');
+      if (d.employeeId) fd.append('employeeId', d.employeeId);
+      await api('POST', '/documents', fd, true);
+      await api('DELETE', `/documents/${id}`);
+      S.documents = await api('GET', '/documents');
+      R();
+    } catch (e) { alert('Replace failed: ' + e.message); }
+  };
+  inp.click();
+}
+// Shared action bar for a document row.
+function docActions(d, isAdmin) {
+  const canUp = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_documents');
+  return `<div class="doc-actions" onclick="event.stopPropagation()">
+    ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="Open in a new tab"><i class="ti ti-eye"></i> View</button>` : ''}
+    ${isAdmin ? reviewControls(d) : ''}
+    ${isAdmin && canUp ? `<button class="btn sm" title="Replace file" onclick="replaceDoc('${d.id}')"><i class="ti ti-refresh"></i></button>` : ''}
+    ${isAdmin && canUp ? `<button class="btn sm" style="color:var(--red)" title="Delete" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
+  </div>`;
 }
 
 // Profile photo: pick a file, resize it to a small square thumbnail in the browser, then save as base64.
