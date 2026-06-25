@@ -115,7 +115,9 @@ body{
  
 /* ─── Stats Row ───────────────────────────────────────────── */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem}
-.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(20,40,80,.10);border-color:var(--green)}
+.stat.clickable:active{transform:translateY(-1px)}
 .stat .lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
 .stat .val{font-size:22px;font-weight:700}
  
@@ -749,14 +751,14 @@ function setDashView(v) { S.dashView = v; R(); }
 
 /* shared dashboard building blocks */
 function _dCard(icon, color, bg, lbl, val, sub, onclick) {
-  return `<div class="stat" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
     <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
     <div style="min-width:0"><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div>${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${sub}</div>` : ''}</div>
   </div>`;
 }
-function _progCard(icon, color, bg, lbl, have, total) {
+function _progCard(icon, color, bg, lbl, have, total, onclick) {
   const pc = total ? Math.round(have / total * 100) : 0;
-  return `<div class="stat" style="display:flex;align-items:center;gap:12px">
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
     <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
     <div style="flex:1;min-width:0"><div class="lbl">${lbl}</div>
       <div class="val" style="font-size:20px">${(have||0).toLocaleString()} <span style="font-size:12px;color:var(--muted);font-weight:400">/ ${(total||0).toLocaleString()} &middot; ${pc}%</span></div>
@@ -771,10 +773,10 @@ function _posBars(emps, label) {
       <div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${p}</span><b>${n.toLocaleString()} <span style="color:var(--muted);font-weight:400">(${(n / tot * 100).toFixed(1)}%)</span></b></div>
       <div class="leave-bar" style="height:8px"><div class="leave-fill" style="width:${Math.round(n / max * 100)}%"></div></div></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No staff records yet.</div>'}</div></div>`;
 }
-function _expiringCard(emps, field, days, icon, label) {
+function _expiringCard(emps, field, days, icon, label, onclick) {
   const cutoff = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
   const list = emps.filter(e => e[field] && e[field] <= cutoff);
-  return _dCard(icon, 'var(--red)', '#FCEBEB', label, list.length.toLocaleString(), `expiring within ${days} days`);
+  return _dCard(icon, 'var(--red)', '#FCEBEB', label, list.length.toLocaleString(), `expiring within ${days} days`, onclick);
 }
 
 function renderDashboard() {
@@ -790,17 +792,17 @@ function renderDashONB() {
   const n = es.length;
   const have = f => es.filter(e => e[f]).length;
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', n.toLocaleString(), 'all records')}
-    ${_progCard('ti-school', '#7A5AF8', '#EEEAFB', 'Induction completed', have('inductionDate'), n)}
-    ${_progCard('ti-stethoscope', 'var(--green)', 'var(--green-light)', 'Medical done', have('medicalDate'), n)}
-    ${_progCard('ti-fingerprint', '#185FA5', '#E6F1FB', 'Biometric done', have('biometricDate'), n)}
-    ${_progCard('ti-id', 'var(--amber)', '#FAEEDA', 'EID received', have('eidDate'), n)}
+    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', n.toLocaleString(), 'all records', "viewDashMetric('total_emp')")}
+    ${_progCard('ti-school', '#7A5AF8', '#EEEAFB', 'Induction completed', have('inductionDate'), n, "viewDashMetric('onb_induction')")}
+    ${_progCard('ti-stethoscope', 'var(--green)', 'var(--green-light)', 'Medical done', have('medicalDate'), n, "viewDashMetric('onb_medical')")}
+    ${_progCard('ti-fingerprint', '#185FA5', '#E6F1FB', 'Biometric done', have('biometricDate'), n, "viewDashMetric('onb_biometric')")}
+    ${_progCard('ti-id', 'var(--amber)', '#FAEEDA', 'EID received', have('eidDate'), n, "viewDashMetric('onb_eid')")}
   </div>
   <div class="section-label" style="margin:1.25rem 0 .6rem">Document expiry alerts</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
-    ${_expiringCard(es, 'eidExpiry', 90, 'ti-id-badge-2', 'EID expiring')}
-    ${_expiringCard(es, 'passportExpiry', 90, 'ti-book', 'Passport expiring')}
-    ${_expiringCard(es, 'laborCardExpiry', 90, 'ti-license', 'Labour card expiring')}
+    ${_expiringCard(es, 'eidExpiry', 90, 'ti-id-badge-2', 'EID expiring', "viewDashMetric('eid_expiring')")}
+    ${_expiringCard(es, 'passportExpiry', 90, 'ti-book', 'Passport expiring', "viewDashMetric('passport_expiring')")}
+    ${_expiringCard(es, 'laborCardExpiry', 90, 'ti-license', 'Labour card expiring', "viewDashMetric('labor_expiring')")}
   </div>
   ${_posBars(es, 'all staff')}`;
 }
@@ -819,30 +821,30 @@ function renderDashOps() {
   const bk = A.filter(a => a.type === 'bike'); const sm = A.filter(a => a.type === 'sim');
   const by = (arr, st) => arr.filter(a => (a.status || '') === st).length;
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
-    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', es.length.toLocaleString())}
-    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Active', active.length.toLocaleString())}
-    ${_dCard('ti-user-off', 'var(--red)', '#FCEBEB', 'Inactive', inact.length.toLocaleString())}
+    ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', es.length.toLocaleString(), '', "viewDashMetric('total_emp')")}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Active', active.length.toLocaleString(), '', "viewDashMetric('ops_active')")}
+    ${_dCard('ti-user-off', 'var(--red)', '#FCEBEB', 'Inactive', inact.length.toLocaleString(), '', "viewDashMetric('inactive')")}
   </div>
   <div class="section-label" style="margin:1.25rem 0 .6rem">Deployment pipeline</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(245px,1fr))">
-    ${_dCard('ti-motorbike', 'var(--amber)', '#FAEEDA', 'Riders: EID received, not deployed', cnt(riders, e => e.eidDate && !e.deploymentDate).toLocaleString(), 'delivery riders')}
-    ${_dCard('ti-license', 'var(--amber)', '#FAEEDA', 'Riders: Licence received, not deployed', cnt(riders, e => e.dlDate && !e.deploymentDate).toLocaleString(), 'delivery riders')}
-    ${_dCard('ti-walk', 'var(--amber)', '#FAEEDA', 'Walkers: EID received, not deployed', cnt(walkers, e => e.eidDate && !e.deploymentDate).toLocaleString(), 'walkers')}
-    ${_dCard('ti-user-exclamation', '#7A5AF8', '#EEEAFB', 'Others: medical+biometric, not deployed', cnt(others, e => e.medicalDate && e.biometricDate && !e.deploymentDate).toLocaleString(), 'non rider/walker')}
+    ${_dCard('ti-motorbike', 'var(--amber)', '#FAEEDA', 'Riders: EID received, no licence date', cnt(riders, e => e.eidDate && !e.dlDate).toLocaleString(), 'delivery riders', "viewDashMetric('pipe_rider_eid_nodl')")}
+    ${_dCard('ti-license', 'var(--amber)', '#FAEEDA', 'Riders: Licence received, not deployed', cnt(riders, e => e.dlDate && !e.deploymentDate).toLocaleString(), 'delivery riders', "viewDashMetric('pipe_rider_dl_nodep')")}
+    ${_dCard('ti-walk', 'var(--amber)', '#FAEEDA', 'Walkers: EID received, not deployed', cnt(walkers, e => e.eidDate && !e.deploymentDate).toLocaleString(), 'walkers', "viewDashMetric('pipe_walker_eid_nodep')")}
+    ${_dCard('ti-user-exclamation', '#7A5AF8', '#EEEAFB', 'Others: medical+biometric, not deployed', cnt(others, e => e.medicalDate && e.biometricDate && !e.deploymentDate).toLocaleString(), 'non rider/walker', "viewDashMetric('pipe_other_ready')")}
   </div>
   <div class="section-label" style="margin:1.25rem 0 .6rem">Fleet &mdash; bikes</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-    ${_dCard('ti-motorbike', '#185FA5', '#E6F1FB', 'Total bikes', bk.length.toLocaleString())}
-    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(bk, 'Assigned').toLocaleString())}
-    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(bk, 'Available').toLocaleString())}
-    ${_dCard('ti-tools', 'var(--amber)', '#FAEEDA', 'In maintenance', by(bk, 'Maintenance').toLocaleString())}
+    ${_dCard('ti-motorbike', '#185FA5', '#E6F1FB', 'Total bikes', bk.length.toLocaleString(), '', "viewDashMetric('bikes_total')")}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(bk, 'Assigned').toLocaleString(), '', "viewDashMetric('bikes_assigned')")}
+    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(bk, 'Available').toLocaleString(), '', "viewDashMetric('bikes_available')")}
+    ${_dCard('ti-tools', 'var(--amber)', '#FAEEDA', 'In maintenance', by(bk, 'Maintenance').toLocaleString(), '', "viewDashMetric('bikes_maint')")}
   </div>
   <div class="section-label" style="margin:1.1rem 0 .6rem">Fleet &mdash; SIMs</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-    ${_dCard('ti-device-mobile', '#185FA5', '#E6F1FB', 'Total SIMs', sm.length.toLocaleString())}
-    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(sm, 'Assigned').toLocaleString())}
-    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(sm, 'Available').toLocaleString())}
-    ${_dCard('ti-ban', 'var(--red)', '#FCEBEB', 'Blocked', by(sm, 'Blocked').toLocaleString())}
+    ${_dCard('ti-device-mobile', '#185FA5', '#E6F1FB', 'Total SIMs', sm.length.toLocaleString(), '', "viewDashMetric('sims_total')")}
+    ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Assigned', by(sm, 'Assigned').toLocaleString(), '', "viewDashMetric('sims_assigned')")}
+    ${_dCard('ti-circle-check', 'var(--green)', 'var(--green-light)', 'Available', by(sm, 'Available').toLocaleString(), '', "viewDashMetric('sims_available')")}
+    ${_dCard('ti-ban', 'var(--red)', '#FCEBEB', 'Blocked', by(sm, 'Blocked').toLocaleString(), '', "viewDashMetric('sims_blocked')")}
   </div>
   ${_posBars(es, 'all staff')}`;
 }
@@ -883,7 +885,6 @@ function renderDashHR() {
     ${card('ti-id-badge','var(--red)','#FCEBEB','Visas expiring ≤90 days',expir.toLocaleString(),'visa_expiring')}
     ${card('ti-cash','var(--green)','var(--green-light)','Monthly payroll',aed(payTot),'payroll')}
   </div>
-  ${renderDashAssets()}
   <div class="card"><div class="card-head"><h3>Workforce status</h3>
     <span style="font-size:11px;color:var(--muted)"><span style="color:var(--green)">●</span> Working &nbsp;<span style="color:var(--amber)">●</span> On leave &nbsp;<span style="color:var(--red)">●</span> Inactive</span></div>
   <div class="card-body" style="padding:1rem 1.25rem">
@@ -961,6 +962,7 @@ async function viewDashMetric(key) {
   try {
     if (!S.employees) S.employees = await api('GET', '/employees');
     if (!S.leaves)    S.leaves    = await api('GET', '/leaves');
+    if (!S.assets)    S.assets    = await api('GET', '/assets');
   } catch (e) {}
   S.dashMetric = { key };
   openModal('dashmetric');
@@ -984,8 +986,20 @@ function renderDashMetricModal() {
   const empCells = e => `<td><b>${e.empId || '—'}</b></td><td>${e.name || '—'}</td><td style="font-family:monospace">${e.passportNo || '—'}</td>`;
   const rowClick = e => `onclick="openModal(null);viewEmp('${e.id}')" style="cursor:pointer"`;
   const empHead = '<th>Emp ID</th><th>Name</th><th>Passport</th>';
+  const isRider = e => /rider/i.test(e.position || '') || !!e.riderId;
+  const isWalker = e => /walk/i.test(e.position || '');
+  const riders = es.filter(isRider);
+  const walkers = es.filter(e => isWalker(e) && !isRider(e));
+  const others = es.filter(e => !isRider(e) && !isWalker(e));
+  const A = S.assets || [];
+  const bk = A.filter(a => a.type === 'bike'); const sm = A.filter(a => a.type === 'sim');
+  const byA = (arr, st) => arr.filter(a => (a.status || '') === st);
+  const dateCol = (field, lbl) => ({ head: empHead + `<th>Position</th><th>${lbl}</th>`, rows: [...es].sort((a, b) => (a[field] ? 1 : 0) - (b[field] ? 1 : 0)).map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e[field] ? fmtDate(e[field]) : '<span style=\"color:var(--red);font-weight:600\">Missing</span>'}</td></tr>`).join('') });
+  const expCol = (field, lbl) => ({ head: empHead + `<th>${lbl}</th><th>Days left</th>`, rows: es.filter(e => e[field] && e[field] <= cutoff90).sort((a, b) => String(a[field]).localeCompare(String(b[field]))).map(e => { const nn = dleft(e[field]); return `<tr ${rowClick(e)}>${empCells(e)}<td style=\"color:${nn<=30?'var(--red)':'var(--text)'};font-weight:${nn<=30?'700':'400'}\">${fmtDate(e[field])}</td><td>${nn} days</td></tr>`; }).join('') });
+  const pipeCol = (list, exHead, exCell) => ({ head: empHead + '<th>Position</th>' + (exHead || ''), rows: list.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td>${exCell ? exCell(e) : ''}</tr>`).join('') });
+  const assetCol = (list) => ({ head: '<th>Code</th><th>Status</th><th>Holder</th><th>Assigned</th>', rows: list.map(a => `<tr><td><b>${a.code || '—'}</b></td><td>${a.status || '—'}</td><td>${a.holderName || a.holderCode || '—'}</td><td>${a.assignedDate ? fmtDate(a.assignedDate) : '—'}</td></tr>`).join('') });
 
-  let title = '', headHTML = '', rowsHTML = '', note = '';
+  let title = '', headHTML = '', rowsHTML = '', note = '', isEmpTable = true;
   if (m.key === 'total_emp')        { title = 'All employees';            headHTML = empHead + '<th>Position</th><th>Status</th>'; rowsHTML = es.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.status || '—'}</td></tr>`).join(''); }
   else if (m.key === 'active_emp')  { title = 'Active & working';         headHTML = empHead + '<th>Position</th><th>Location</th>'; rowsHTML = working.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.location || '—'}</td></tr>`).join(''); }
   else if (m.key === 'on_leave')    { title = 'On leave today';           headHTML = empHead + '<th>Leave type</th><th>Dates</th>'; rowsHTML = onLeave.map(e => { const l = leaveOf[e.id] || {}; return `<tr ${rowClick(e)}>${empCells(e)}<td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td></tr>`; }).join(''); }
@@ -993,6 +1007,26 @@ function renderDashMetricModal() {
   else if (m.key === 'visa_expiring'){ title = 'Visas expiring ≤90 days'; headHTML = empHead + '<th>Visa expiry</th><th>Days left</th>'; rowsHTML = visaExp.map(e => { const n = dleft(e.evisaExpiry); return `<tr ${rowClick(e)}>${empCells(e)}<td style="color:${n<=30?'var(--red)':'var(--text)'};font-weight:${n<=30?'700':'400'}">${fmtDate(e.evisaExpiry)}</td><td>${n} days</td></tr>`; }).join(''); }
   else if (m.key === 'pending_leaves'){ title = 'Pending leave requests'; headHTML = '<th>Emp ID</th><th>Name</th><th>Type</th><th>From → To</th><th>Days</th><th>Applied</th>'; rowsHTML = pending.map(l => `<tr><td><b>${l.empId || '—'}</b></td><td>${l.empName || '—'}</td><td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td><td>${l.days || '—'}</td><td>${fmtDate(l.appliedOn)}</td></tr>`).join(''); }
   else if (m.key === 'payroll')     { title = 'Monthly payroll'; note = `<p style="font-size:15px"><b>Total net pay:</b> <span style="color:var(--green);font-weight:700">${aed(payTot)}</span> across ${(S.payslips||[]).length} payslip(s).</p>`; }
+  else if (m.key === 'onb_induction'){ title = 'Induction status'; const r = dateCol('inductionDate', 'Induction date'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'onb_medical')  { title = 'Medical status'; const r = dateCol('medicalDate', 'Medical date'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'onb_biometric'){ title = 'Biometric status'; const r = dateCol('biometricDate', 'Biometric date'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'onb_eid')      { title = 'EID received status'; const r = dateCol('eidDate', 'EID received'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'eid_expiring') { title = 'EID expiring ≤90 days'; const r = expCol('eidExpiry', 'EID expiry'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'passport_expiring'){ title = 'Passports expiring ≤90 days'; const r = expCol('passportExpiry', 'Passport expiry'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'labor_expiring'){ title = 'Labour cards expiring ≤90 days'; const r = expCol('laborCardExpiry', 'Labour card expiry'); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'ops_active')   { title = 'Active employees'; const r = pipeCol(active, '<th>Location</th>', e => `<td>${e.location || '—'}</td>`); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'pipe_rider_eid_nodl'){ title = 'Riders — EID received, no licence date'; const r = pipeCol(riders.filter(e => e.eidDate && !e.dlDate), '<th>EID received</th>', e => `<td>${fmtDate(e.eidDate)}</td>`); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'pipe_rider_dl_nodep'){ title = 'Riders — Licence received, not deployed'; const r = pipeCol(riders.filter(e => e.dlDate && !e.deploymentDate), '<th>Licence received</th>', e => `<td>${fmtDate(e.dlDate)}</td>`); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'pipe_walker_eid_nodep'){ title = 'Walkers — EID received, not deployed'; const r = pipeCol(walkers.filter(e => e.eidDate && !e.deploymentDate), '<th>EID received</th>', e => `<td>${fmtDate(e.eidDate)}</td>`); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'pipe_other_ready'){ title = 'Others — medical + biometric done, not deployed'; const r = pipeCol(others.filter(e => e.medicalDate && e.biometricDate && !e.deploymentDate), '<th>Medical</th><th>Biometric</th>', e => `<td>${fmtDate(e.medicalDate)}</td><td>${fmtDate(e.biometricDate)}</td>`); headHTML = r.head; rowsHTML = r.rows; }
+  else if (m.key === 'bikes_total')  { title = 'All bikes'; const r = assetCol(bk); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'bikes_assigned'){ title = 'Bikes assigned'; const r = assetCol(byA(bk, 'Assigned')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'bikes_available'){ title = 'Bikes available'; const r = assetCol(byA(bk, 'Available')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'bikes_maint')  { title = 'Bikes in maintenance'; const r = assetCol(byA(bk, 'Maintenance')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'sims_total')   { title = 'All SIMs'; const r = assetCol(sm); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'sims_assigned'){ title = 'SIMs assigned'; const r = assetCol(byA(sm, 'Assigned')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'sims_available'){ title = 'SIMs available'; const r = assetCol(byA(sm, 'Available')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
+  else if (m.key === 'sims_blocked') { title = 'SIMs blocked'; const r = assetCol(byA(sm, 'Blocked')); headHTML = r.head; rowsHTML = r.rows; isEmpTable = false; }
 
   const colCount = (headHTML.match(/<th>/g) || []).length || 3;
   const body = rowsHTML || `<tr><td colspan="${colCount}" style="text-align:center;padding:1.5rem;color:var(--muted)">No records.</td></tr>`;
@@ -1001,13 +1035,35 @@ function renderDashMetricModal() {
     <div class="modal-head"><h3>${title}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
     <div class="modal-body">
       ${note}
-      ${headHTML ? `<div class="tbl-wrap"><table><thead><tr>${headHTML}</tr></thead><tbody>${body}</tbody></table></div>
-      <p style="font-size:11px;color:var(--muted);margin-top:8px">Tip: click a row to open that employee's full profile.</p>` : ''}
+      ${headHTML ? `<div class="tbl-wrap"><table id="dashmetric-table"><thead><tr>${headHTML}</tr></thead><tbody>${body}</tbody></table></div>
+      ${isEmpTable ? `<p style="font-size:11px;color:var(--muted);margin-top:8px">Tip: click a row to open that employee's full profile.</p>` : ''}` : ''}
     </div>
-    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Close</button></div>
+    <div class="modal-foot">${headHTML ? `<button class="btn b" id="copy-dm-btn" onclick="copyDashMetric()"><i class="ti ti-copy"></i> Copy data</button>` : ''}<button class="btn" onclick="openModal(null)">Close</button></div>
   </div></div>`;
 }
  
+function copyDashMetric() {
+  const t = document.getElementById('dashmetric-table');
+  if (!t) { alert('Nothing to copy.'); return; }
+  const lines = [];
+  t.querySelectorAll('tr').forEach(tr => {
+    const cells = [...tr.querySelectorAll('th,td')].map(c => (c.innerText || '').replace(/\s+/g, ' ').trim());
+    if (cells.length) lines.push(cells.join('\t'));
+  });
+  const text = lines.join('\n');
+  const done = () => { const b = document.getElementById('copy-dm-btn'); if (b) { const o = b.innerHTML; b.innerHTML = '<i class="ti ti-check"></i> Copied ' + (lines.length - 1) + ' rows'; setTimeout(() => b.innerHTML = o, 1600); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else { fallbackCopy(text, done); }
+}
+function fallbackCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); cb && cb(); } catch (e) { alert('Copy is not supported in this browser — please select the table manually.'); }
+  ta.remove();
+}
+
 /* ─── Leaves Export ───────────────────────────────────── */
 // Download a server report with the auth token attached (plain <a> links can't
 // carry the bearer token, so we fetch → blob → save).
@@ -1393,7 +1449,8 @@ function renderCertModal() {
       <div style="display:flex;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
         <div style="width:34px;height:34px;border-radius:7px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;color:#185FA5;flex-shrink:0"><i class="ti ti-file-description"></i></div>
         <div style="flex:1;margin-left:9px"><b style="font-size:13px;display:block">${fname}</b>
-        <span style="font-size:11px;color:var(--muted)">Saved in the employee's documents · opens from Google Drive in the live system</span></div>
+        <span style="font-size:11px;color:var(--muted)">Saved in the employee's documents (leave folder)</span></div>
+        ${l.certDocId ? `<button class="btn sm g" style="flex-shrink:0" onclick="viewDoc('${l.certDocId}')"><i class="ti ti-eye"></i> View</button>` : `<span style="font-size:11px;color:var(--faint);flex-shrink:0">no file linked</span>`}
       </div>
     </div>
     <div class="modal-foot"><button class="btn" onclick="openModal(null)">Close</button></div>
@@ -1428,22 +1485,33 @@ function renderPayrollPage() {
 /* ─── Documents Page ───────────────────────────────────────── */
 async function bulkDocUpload(files) {
   if (!files || !files.length) return;
-  let okN = 0; const miss = [];
-  for (const f of [...files]) {
-    const m = f.name.match(/^([A-Za-z]{2}\d+)/);
-    const emp = m ? (S.employees || []).find(e => e.empId.toUpperCase() === m[1].toUpperCase()) : null;
-    if (emp) {
+  const empByNo = {}; (S.employees || []).forEach(e => { if (e.empId) empByNo[String(e.empId).toUpperCase()] = e; });
+  const byEmp = {}; const unmatched = [];
+  [...files].forEach(f => {
+    const rel = f.webkitRelativePath || f.name;
+    const segs = rel.split('/').filter(Boolean);
+    let emp = null;
+    for (const sg of segs) { if (empByNo[sg.toUpperCase()]) { emp = empByNo[sg.toUpperCase()]; break; } }
+    if (emp) { (byEmp[emp.id] = byEmp[emp.id] || { emp, files: [] }).files.push(f); }
+    else unmatched.push(rel);
+  });
+  const groups = Object.values(byEmp);
+  const totalMatched = groups.reduce((s, g) => s + g.files.length, 0);
+  if (!totalMatched) { alert('No files matched an employee-number folder.\nName each subfolder with the employee number (e.g. 30001) so files land on the right profile.'); return; }
+  if (!confirm(`Upload ${totalMatched} file(s) to ${groups.length} employee profile(s)?` + (unmatched.length ? `\n${unmatched.length} file(s) are not inside an employee-number folder and will be skipped.` : ''))) return;
+  let okN = 0; const fail = [];
+  for (const g of groups) {
+    for (const f of g.files) {
       const fd = new FormData();
-      fd.append('employeeId', emp.id);
-      fd.append('name', f.name);
-      fd.append('type', 'Bulk upload');
+      fd.append('employeeId', g.emp.id);
+      fd.append('name', f.name || 'document');
+      fd.append('category', 'employee');
       fd.append('file', f);
-      try { await api('POST', '/documents', fd, true); okN++; }
-      catch (e) { miss.push(f.name + ' — ' + e.message); }
-    } else miss.push(f.name);
+      try { await api('POST', '/documents', fd, true); okN++; } catch (e) { fail.push(f.name + ' \u2014 ' + e.message); }
+    }
   }
   S.documents = await api('GET', '/documents');
-  alert(`✓ ${okN} document(s) uploaded (matched by Employee ID prefix).${miss.length ? `\n✗ Unmatched / failed:\n` + miss.join('\n') : ''}`);
+  alert(`\u2713 ${okN} document(s) uploaded to their employee profiles.` + (unmatched.length ? `\n\u2022 ${unmatched.length} skipped (not in an employee-number folder).` : '') + (fail.length ? `\n\u2717 Failed:\n` + fail.join('\n') : ''));
   R();
 }
  
@@ -1454,8 +1522,8 @@ function renderDocsPage() {
     <div class="card-head">
       <h3>Documents</h3>
       <div style="display:flex;gap:7px">${canUp ? `
-        <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-files"></i> Bulk upload</button>
-        <input type="file" id="bulkdocs" multiple style="display:none" onchange="bulkDocUpload(this.files)">
+        <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-folder-up"></i> Bulk upload (by folder)</button>
+        <input type="file" id="bulkdocs" webkitdirectory multiple style="display:none" onchange="bulkDocUpload(this.files)">
         <button class="btn g" onclick="openModal('uploadDoc')"><i class="ti ti-upload"></i> Upload</button>` : ''}
       </div>
     </div>
@@ -1605,7 +1673,7 @@ function renderLeavesTab(e, leaves, bal, isAdmin) {
         <td>${fmtDate(l.fromDate)}</td><td>${fmtDate(l.toDate)}</td><td>${l.days}</td>
         <td style="white-space:normal;font-size:11px">${l.reason||'—'}</td>
         <td>${l.certificate
-          ? `<span class="badge bg" style="font-size:9px"><i class="ti ti-paperclip"></i></span>`
+          ? `<button class="btn sm" style="color:var(--green);border-color:var(--green);padding:2px 7px;font-size:10px" onclick="viewLeaveDoc('${l.id}')"><i class="ti ti-paperclip"></i> View</button>`
           : l.type.startsWith('Sick') ? `<span class="badge br" style="font-size:9px">Missing</span>` : '—'}</td>
         <td><span class="badge ${l.status==='Approved'?'bg':l.status==='Rejected'?'br':'ba'}">${l.status}</span></td>
         <td><div style="display:flex;gap:4px;align-items:center">${isAdmin && l.status === 'Pending'
@@ -1912,7 +1980,7 @@ function renderEmpLeavesTab(emp, leaves, bal, prob) {
         <td>${fmtDate(l.fromDate)}</td><td>${fmtDate(l.toDate)}</td><td>${l.days}</td>
         <td style="white-space:normal;font-size:11px">${l.reason||'—'}</td>
         <td>${l.certificate
-          ? `<span class="badge bg" style="font-size:9px"><i class="ti ti-paperclip"></i> Yes</span>`
+          ? `<button class="btn sm" style="color:var(--green);border-color:var(--green);padding:2px 7px;font-size:10px" onclick="viewLeaveDoc('${l.id}')"><i class="ti ti-paperclip"></i> View</button>`
           : l.type.startsWith('Sick') ? `<span class="badge br" style="font-size:9px">Missing</span>` : '—'}</td>
         <td><span class="badge ${l.status==='Approved'?'bg':l.status==='Rejected'?'br':'ba'}">${l.status}</span></td>
       </tr>`).join('')}
@@ -1998,6 +2066,7 @@ function renderModal() {
   if (m === 'assetModal')                       return renderAssetModal();
   if (m === 'assignAsset')                      return renderAssignAssetModal();
   if (m === 'accExit')                          return renderAccExitModal();
+  if (m === 'assetReturn')                      return renderAssetReturnModal();
   if (m === 'assetImport')                      return renderAssetImportModal();
   return '';
 }
@@ -2322,19 +2391,23 @@ async function submitLeave() {
   const days = Math.max(1, Math.floor((new Date(toDate) - new Date(fromDate)) / 864e5) + 1);
   try {
     const certF = document.getElementById('certfile')?.files[0];
-    const res = await api('POST', '/leaves', {
-      type, fromDate, toDate, days, reason,
-      employeeId: S.viewEmp?.id,
-      certificate: !!certF,
-      certificateName: certF ? certF.name : ''
-    });
+    let certDocId = '';
     if (certF) {
       const cfd = new FormData();
       cfd.append('name', certF.name);
       cfd.append('type', 'Leave Certificate');
+      cfd.append('category', 'leave');
+      if (S.viewEmp?.id) cfd.append('employeeId', S.viewEmp.id);
       cfd.append('file', certF);
-      try { await api('POST', '/documents', cfd, true); } catch (e) {}
+      try { const up = await api('POST', '/documents', cfd, true); certDocId = up?.id || ''; } catch (e) {}
     }
+    const res = await api('POST', '/leaves', {
+      type, fromDate, toDate, days, reason,
+      employeeId: S.viewEmp?.id,
+      certificate: !!certF,
+      certDocId,
+      certificateName: certF ? certF.name : ''
+    });
     S.leaves = await api('GET', '/leaves');
     S.notifications = await api('GET', '/notifications');
     S.documents = await api('GET', '/documents');
@@ -3774,13 +3847,59 @@ async function saveAssignAsset() {
   } catch (e) { alert('Error: ' + e.message); }
 }
 
-async function unassignAsset(id) {
+function unassignAsset(id) { openAssetReturn(id); }
+
+function openAssetReturn(id) {
   const a = (S.assets || []).find(x => x.id === id);
-  const label = a ? (assetTypeLabel(a.type) + ' ' + a.code) : 'this asset';
-  if (!confirm('Mark ' + label + ' as returned / unassigned? It becomes Available again.')) return;
+  S.assetReturnDraft = { id, type: a ? a.type : 'other', code: a ? a.code : '', returnDate: new Date().toISOString().slice(0, 10) };
+  openModal('assetReturn');
+}
+
+function renderAssetReturnModal() {
+  const d = S.assetReturnDraft || {};
+  const isBike = d.type === 'bike';
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <div class="modal-head"><h3><i class="ti ti-arrow-back-up"></i> Return ${assetTypeLabel(d.type)} ${d.code}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="alert ${isBike ? 'alert-w' : 'alert-i'}"><i class="ti ti-info-circle"></i><div>${isBike
+        ? 'A signed return form is <b>required</b> — the return is only recorded once the form is attached. The form is saved to the rider\'s profile and the bike folder.'
+        : 'Records the return and marks the item Available again.'}</div></div>
+      <div class="form-grid">
+        <div class="field full"><label>Return date</label><input id="ret-date" type="date" value="${d.returnDate || ''}"/></div>
+        <div class="field full"><label>New status</label><select id="ret-status">
+          <option>Available</option>${isBike ? '<option>Maintenance</option><option>Accident</option><option>Inactive</option>' : '<option>Inactive</option>'}
+        </select></div>
+        <div class="field full"><label>Return form ${isBike ? '<span style="color:var(--red)">* required</span>' : '<span style="color:var(--muted)">(optional)</span>'}</label>
+          <div class="upload-zone" style="padding:1.1rem" onclick="document.getElementById('ret-file').click()">
+            <i class="ti ti-file-text" style="font-size:20px;color:var(--muted)"></i>
+            <div style="font-size:12px;margin-top:5px;font-weight:600">Attach signed return form — PDF, JPG, PNG</div>
+          </div>
+          <input type="file" id="ret-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="document.getElementById('ret-lbl').textContent='✓ '+this.files[0]?.name"/>
+          <div id="ret-lbl" style="font-size:12px;color:var(--green);margin-top:4px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Cancel</button>
+      <button class="btn g" onclick="saveAssetReturn()"><i class="ti ti-check"></i> Record return</button></div>
+  </div></div>`;
+}
+
+async function saveAssetReturn() {
+  const d = S.assetReturnDraft || {};
+  const returnDate = gv('ret-date');
+  const status = gv('ret-status') || 'Available';
+  const file = document.getElementById('ret-file')?.files[0];
+  if (!returnDate) { alert('Please choose the return date.'); return; }
+  if (d.type === 'bike' && !file) { alert('Please attach the signed return form — the return is only recorded once the form is attached.'); return; }
   try {
-    await api('POST', '/assets/' + id + '/unassign', {});
+    const fd = new FormData();
+    fd.append('returnDate', returnDate);
+    fd.append('status', status);
+    if (file) fd.append('file', file);
+    await api('POST', '/assets/' + d.id + '/unassign', fd, true);
+    S.modal = null; S.assetReturnDraft = null;
     await loadAssets(true);
+    if (S.screen === 'admin') { try { S.documents = await api('GET', '/documents'); } catch (e) {} }
     R();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -3797,10 +3916,18 @@ function renderAccExitModal() {
   return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
     <div class="modal-head"><h3><i class="ti ti-bed-off"></i> Record accommodation exit</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
     <div class="modal-body">
-      <div class="alert alert-i"><i class="ti ti-info-circle"></i><div>This frees the bed and saves the stay in history (check-in to check-out). It does not change the employee's job status.</div></div>
+      <div class="alert alert-w"><i class="ti ti-info-circle"></i><div>This frees the bed and saves the stay in history. A signed exit form is <b>required</b> — the exit date is only recorded once the form is attached. This does not change the employee's job status.</div></div>
       <div class="form-grid">
         <div class="field"><label>Check-in</label><input value="${d.checkIn ? fmtDate(d.checkIn) : '—'}" disabled/></div>
         <div class="field"><label>Exit / check-out date</label><input id="acc-exit-date" type="date" value="${d.checkOut || ''}"/></div>
+        <div class="field full"><label>Exit form <span style="color:var(--red)">* required</span></label>
+          <div class="upload-zone" style="padding:1.1rem" onclick="document.getElementById('acc-exit-file').click()">
+            <i class="ti ti-file-text" style="font-size:20px;color:var(--muted)"></i>
+            <div style="font-size:12px;margin-top:5px;font-weight:600">Attach signed exit form — PDF, JPG, PNG</div>
+          </div>
+          <input type="file" id="acc-exit-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="document.getElementById('acc-exit-lbl').textContent='✓ '+this.files[0]?.name"/>
+          <div id="acc-exit-lbl" style="font-size:12px;color:var(--green);margin-top:4px"></div>
+        </div>
       </div>
     </div>
     <div class="modal-foot"><button class="btn" onclick="openModal(null)">Cancel</button>
@@ -3811,12 +3938,18 @@ function renderAccExitModal() {
 async function saveAccExit() {
   const d = S.accExitDraft || {};
   const checkOut = gv('acc-exit-date');
+  const file = document.getElementById('acc-exit-file')?.files[0];
   if (!checkOut) { alert('Please choose the exit date.'); return; }
+  if (!file) { alert('Please attach the signed exit form — the exit date is only saved once the form is attached.'); return; }
   try {
-    await api('POST', '/accommodation/allocations/' + d.id + '/exit', { checkOut });
+    const fd = new FormData();
+    fd.append('checkOut', checkOut);
+    fd.append('file', file);
+    await api('POST', '/accommodation/allocations/' + d.id + '/exit', fd, true);
     S.modal = null; S.accExitDraft = null;
     await loadAccommodation(true);
     try { S.accHistory = await api('GET', '/accommodation/history'); } catch (e) {}
+    if (S.screen === 'admin') { try { S.documents = await api('GET', '/documents'); } catch (e) {} }
     R();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -3859,7 +3992,48 @@ function renderReports() {
             <button class="btn g" style="flex-shrink:0" onclick="downloadReport('${path}','${file}')"><i class="ti ti-download"></i> Download</button>
           </div>`).join('')}
       </div>
-    </div>`).join('')}`;
+    </div>`).join('')}
+  ${renderCustomReportCard()}`;
+}
+
+function renderCustomReportCard() {
+  const cols = [
+    ['empId', 'Employee ID'], ['name', 'Name'], ['position', 'Position'], ['department', 'Department'],
+    ['location', 'Location'], ['status', 'Status'], ['nationality', 'Nationality'], ['contact', 'Contact'],
+    ['email', 'Email'], ['joiningDate', 'Joining date'], ['deploymentDate', 'Deployment date'], ['riderId', 'Rider ID'],
+    ['passportNo', 'Passport'], ['eidNo', 'EID number'], ['evisaExpiry', 'E-visa expiry'], ['passportExpiry', 'Passport expiry'],
+    ['eidExpiry', 'EID expiry'], ['laborCardExpiry', 'Labour card expiry'], ['licenseExpiry', 'Licence expiry'], ['contractExpiry', 'Contract expiry'],
+    ['basicSalary', 'Basic'], ['housingSalary', 'Housing'], ['transportSalary', 'Transport'], ['foodSalary', 'Food']
+  ];
+  const def = ['empId', 'name', 'position', 'status'];
+  return `<div class="card" style="margin-bottom:1.1rem">
+    <div class="card-head"><h3><i class="ti ti-adjustments-alt" style="color:var(--green)"></i> Custom employee report</h3></div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Pick the columns and (optionally) filter, then download your own Excel report.</p>
+      <div class="section-label">Columns</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:7px;margin-bottom:.9rem">
+        ${cols.map(([k, l]) => `<label style="display:flex;align-items:center;gap:7px;background:#fafaf8;border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12px;cursor:pointer"><input type="checkbox" class="crcol" value="${k}" ${def.includes(k) ? 'checked' : ''} style="accent-color:var(--green)"/> ${l}</label>`).join('')}
+      </div>
+      <div class="section-label">Filters (optional)</div>
+      <div class="form-grid">
+        <div class="field"><label>Status</label><select id="cr-status"><option value="">Any</option><option>Active</option><option>Inactive</option></select></div>
+        <div class="field"><label>Position contains</label><input id="cr-pos" placeholder="e.g. Rider"/></div>
+        <div class="field"><label>Location contains</label><input id="cr-loc" placeholder="e.g. Dubai"/></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:.5rem"><button class="btn g" onclick="buildCustomReport()"><i class="ti ti-download"></i> Download custom report</button></div>
+    </div>
+  </div>`;
+}
+
+function buildCustomReport() {
+  const cols = [...document.querySelectorAll('.crcol:checked')].map(c => c.value);
+  if (!cols.length) { alert('Please select at least one column.'); return; }
+  const qs = new URLSearchParams();
+  qs.set('cols', cols.join(','));
+  const st = gv('cr-status'); if (st) qs.set('status', st);
+  const pos = gv('cr-pos'); if (pos) qs.set('position', pos);
+  const loc = gv('cr-loc'); if (loc) qs.set('location', loc);
+  downloadReport('/reports/custom?' + qs.toString(), 'custom_employee_report_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 
 /* ─── Event Binding & Init ─────────────────────────────────── */
