@@ -48,6 +48,24 @@ const uploadLeaveAttachment = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+// Move an uploaded file into UPLOAD_DIR/<category>/<empNo>/ and return its path relative to UPLOAD_DIR.
+function placeFile(file, category, empNo) {
+  const cat = String(category || 'employee').replace(/[^a-z0-9_-]/gi, '') || 'employee';
+  const emp = String(empNo || 'unknown').replace(/[^a-z0-9_-]/gi, '') || 'unknown';
+  const dir = path.join(UPLOAD_DIR, cat, emp);
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, file.filename);
+  try { fs.renameSync(file.path, dest); } catch (e) { try { fs.copyFileSync(file.path, dest); fs.unlinkSync(file.path); } catch (_) {} }
+  return path.posix.join(cat, emp, file.filename);
+}
+async function addDoc(empId, name, type, size, relPath, uploader) {
+  const id = uid('D');
+  await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, empId, name, type, size || '', relPath, today(), uploader]);
+  return id;
+}
+async function empNoOf(id) { try { const r = await query('SELECT * FROM employees WHERE id = ?', [id]); if (r.rows.length) return rowToEmp(r.rows[0]).empId || id; } catch (e) {} return id; }
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // NOTE: no public /uploads mount — documents are served only via the authenticated /api/documents/:id/download route
@@ -139,7 +157,7 @@ app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!is
 
 app.get('/api/leaves', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM leaves WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToLeave)); } const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); res.json(r.rows.map(rowToLeave)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); if (req.body.fromDate && req.body.toDate && String(req.body.toDate) < String(req.body.fromDate)) return res.status(400).json({ error: 'The leave end date must be on or after the start date.' }); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today() }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave request submitted', `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)) has been submitted and is awaiting approval. You will be notified once it is reviewed.`); await notifyAdmins(`New leave request \u2014 ${e.name}`, `${e.name} (${e.empId}) has requested ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)).\nReason: ${lv.reason || '\u2014'}\n\nReview it in the HRMS under Leave Requests.`, 'approve_leaves'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); if (req.body.fromDate && req.body.toDate && String(req.body.toDate) < String(req.body.fromDate)) return res.status(400).json({ error: 'The leave end date must be on or after the start date.' }); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today(), certificate: !!(req.body.certDocId || req.body.certificate), certDocId: req.body.certDocId || '', certificateName: req.body.certificateName || '' }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave request submitted', `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)) has been submitted and is awaiting approval. You will be notified once it is reviewed.`); await notifyAdmins(`New leave request \u2014 ${e.name}`, `${e.name} (${e.empId}) has requested ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)).\nReason: ${lv.reason || '\u2014'}\n\nReview it in the HRMS under Leave Requests.`, 'approve_leaves'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.patch('/api/leaves/:id/decide', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'approve_leaves')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM leaves WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const lv = rowToLeave(r.rows[0]); const newSt = req.body.decision === 'Approved' ? 'Approved' : 'Rejected'; lv.status = newSt; lv.decidedAt = today(); lv.decidedBy = req.user.name; await query('UPDATE leaves SET status = ?, data = ? WHERE id = ?', [newSt, JSON.stringify(lv), lv.id]); await notify(lv.employeeId, newSt === 'Approved' ? 'approved' : 'rejected', 'Leave ' + newSt, `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} has been ${newSt.toLowerCase()} by ${req.user.name}.`); res.json({ message: newSt }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -159,7 +177,7 @@ app.post('/api/payslips/bulk', auth, async (req, res) => { try { if (!isSuperAdm
 
 app.get('/api/documents', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM documents WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } const r = await query('SELECT * FROM documents ORDER BY uploadedAt DESC', []); res.json(r.rows.map(d => ({ id: d.id, employeeId: d.employeeid ?? d.employeeId, name: d.name, type: d.type, filename: d.filename }))); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); if (req.user.role !== 'employee' && !hasPermission(req, 'upload_documents')) return res.status(403).json({ error: 'No permission' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const id = uid('D'); await query('INSERT INTO documents (id, employeeId, name, type, size, filename, uploadedAt, uploader) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, req.file.filename, today(), req.user.name]); res.json({ id, filename: req.file.filename }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post('/api/documents', auth, upload.single('file'), async (req, res) => { try { if (!req.file) return res.status(400).json({ error: 'No file' }); if (req.user.role !== 'employee' && !hasPermission(req, 'upload_documents')) return res.status(403).json({ error: 'No permission' }); const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const empNo = await empNoOf(empId); const category = ['leave', 'acc', 'bike', 'employee'].includes(String(req.body.category || '').toLowerCase()) ? String(req.body.category).toLowerCase() : 'employee'; const relPath = placeFile(req.file, category, empNo); const id = await addDoc(empId, req.body.name || req.file.originalname, req.file.mimetype, req.file.size, relPath, req.user.name); res.json({ id, filename: relPath }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/documents/:id/download', auth, async (req, res) => { try { const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; const owner = d.employeeid ?? d.employeeId; if (req.user.role === 'employee' && owner !== req.user.employeeId) return res.status(403).json({ error: 'No permission' }); let filepath = path.join(UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) filepath = path.join(LEGACY_UPLOAD_DIR, d.filename); if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'File not found' }); res.download(filepath, d.name || d.filename); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -243,6 +261,22 @@ app.get('/api/reports/expiring', auth, async (req, res) => {
     });
     veh.sort((a, b) => a['Days left'] - b['Days left']);
     sendXlsx(res, 'expiring_documents', [['Visas (90 days)', visas], ['Vehicle docs (30 days)', veh]]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/reports/custom', auth, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });
+    const COLS = { empId: 'Employee ID', name: 'Name', firstName: 'First name', lastName: 'Last name', passportNo: 'Passport', nationality: 'Nationality', gender: 'Gender', contact: 'Contact', email: 'Email', position: 'Position', collar: 'Collar', department: 'Department', location: 'Location', status: 'Status', joiningDate: 'Joining date', deploymentDate: 'Deployment date', inductionDate: 'Induction date', medicalDate: 'Medical date', biometricDate: 'Biometric date', eidDate: 'EID received', dlDate: 'Licence received', riderId: 'Rider ID', visaStatus: 'Visa status', evisaExpiry: 'E-visa expiry', passportExpiry: 'Passport expiry', eidExpiry: 'EID expiry', laborCardExpiry: 'Labour card expiry', licenseExpiry: 'Licence expiry', contractExpiry: 'Contract expiry', eidNo: 'EID number', bankName: 'Bank', iban: 'IBAN', basicSalary: 'Basic', housingSalary: 'Housing', transportSalary: 'Transport', foodSalary: 'Food' };
+    let cols = String(req.query.cols || '').split(',').map(c => c.trim()).filter(c => COLS[c]);
+    if (!cols.length) cols = ['empId', 'name', 'position', 'status'];
+    const fStatus = String(req.query.status || '').trim();
+    const fPos = String(req.query.position || '').trim().toLowerCase();
+    const fLoc = String(req.query.location || '').trim().toLowerCase();
+    const emps = (await query('SELECT * FROM employees ORDER BY empId', [])).rows.map(rowToEmp)
+      .filter(e => (!fStatus || (e.status || '') === fStatus) && (!fPos || (e.position || '').toLowerCase().includes(fPos)) && (!fLoc || (e.location || '').toLowerCase().includes(fLoc)));
+    const rows = emps.map(e => { const o = {}; cols.forEach(c => { o[COLS[c]] = e[c] != null ? e[c] : ''; }); return o; });
+    sendXlsx(res, 'custom_employee_report', [['Employees', rows]]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -431,19 +465,22 @@ app.delete('/api/accommodation/allocations/:id', auth, async (req, res) => {
 });
 
 // Record an accommodation exit: archive the stay (check-in -> check-out) then free the bed.
-app.post('/api/accommodation/allocations/:id/exit', auth, async (req, res) => {
+app.post('/api/accommodation/allocations/:id/exit', auth, upload.single('file'), async (req, res) => {
   try {
     if (!canAssignBeds(req)) return res.status(403).json({ error: 'No permission' });
+    if (!req.file) return res.status(400).json({ error: 'An exit form must be attached before the exit date can be recorded.' });
     const r = await query('SELECT * FROM bed_allocations WHERE id = ?', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Allocation not found' });
     const a = rowToAlloc(r.rows[0]);
     const checkOut = req.body.checkOut || today();
     if (a.checkIn && String(checkOut) < String(a.checkIn)) return res.status(400).json({ error: 'Exit date cannot be before the check-in date' });
-    await query('INSERT INTO acc_history (id, employeeId, campId, roomId, bed, checkIn, checkOut, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [uid('AH'), a.employeeId, a.campId, a.roomId, a.bed, a.checkIn || '', checkOut, JSON.stringify({ checkIn: a.checkIn || '', checkOut })]);
-    await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
     const exEmpRow = (await query('SELECT * FROM employees WHERE id = ?', [a.employeeId])).rows[0];
     const exEmp = exEmpRow ? rowToEmp(exEmpRow) : {};
+    const exitFormPath = placeFile(req.file, 'acc', exEmp.empId || a.employeeId);
+    await addDoc(a.employeeId, 'Accommodation Exit Form', req.file.mimetype, req.file.size, exitFormPath, req.user.name);
+    await query('INSERT INTO acc_history (id, employeeId, campId, roomId, bed, checkIn, checkOut, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [uid('AH'), a.employeeId, a.campId, a.roomId, a.bed, a.checkIn || '', checkOut, JSON.stringify({ checkIn: a.checkIn || '', checkOut, exitForm: exitFormPath })]);
+    await query('DELETE FROM bed_allocations WHERE id = ?', [req.params.id]);
     await notify(a.employeeId, 'info', 'Accommodation exit recorded', `Your accommodation stay has been closed with an exit date of ${checkOut}. This does not change your job status.`);
     await notifyAdmins(`Accommodation exit \u2014 ${exEmp.name || ''}`, `${exEmp.name || ''} (${exEmp.empId || ''}) checked out of accommodation on ${checkOut} (recorded by ${req.user.name}).`, ['manage_accommodation', 'assign_beds']);
     await audit(req.user.name, `Accommodation exit: emp ${a.employeeId} checked out ${checkOut}`);
@@ -610,17 +647,30 @@ app.post('/api/assets/:id/assign', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/assets/:id/unassign', auth, async (req, res) => {
+app.post('/api/assets/:id/unassign', auth, upload.single('file'), async (req, res) => {
   try {
     if (!canAssignAssets(req)) return res.status(403).json({ error: 'No permission' });
     const r = await query('SELECT * FROM assets WHERE id = ?', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
-    const status = String(req.body.status || 'Available').trim() || 'Available';
-    await query('UPDATE assets SET assignedTo = ?, assignedDate = ?, status = ? WHERE id = ?',
-      [null, null, status, req.params.id]);
     const a = rowToAsset(r.rows[0]);
-    await audit(req.user.name, `Asset ${a.code} returned/unassigned`);
-    res.json({ message: 'Unassigned' });
+    const isBike = a.type === 'bike';
+    const returnDate = req.body.returnDate || today();
+    if (isBike && !req.file) return res.status(400).json({ error: 'A signed return form must be attached before a bike return can be recorded.' });
+    const status = String(req.body.status || 'Available').trim() || 'Available';
+    let formPath = '';
+    if (req.file) {
+      const prevId = a.assignedTo;
+      const empNo = prevId ? await empNoOf(prevId) : 'unassigned';
+      formPath = placeFile(req.file, 'bike', empNo);
+      if (prevId) await addDoc(prevId, `${isBike ? 'Bike' : 'Asset'} return form \u2014 ${a.code}`, req.file.mimetype, req.file.size, formPath, req.user.name);
+    }
+    const base = J(r.rows[0].data, {});
+    base.lastReturnDate = returnDate;
+    if (formPath) base.lastReturnForm = formPath;
+    await query('UPDATE assets SET assignedTo = ?, assignedDate = ?, status = ?, data = ? WHERE id = ?',
+      [null, null, status, JSON.stringify(base), req.params.id]);
+    await audit(req.user.name, `Asset ${a.code} returned on ${returnDate}`);
+    res.json({ message: 'Returned', returnDate });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
