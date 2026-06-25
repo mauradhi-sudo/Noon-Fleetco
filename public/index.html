@@ -111,8 +111,12 @@ body{
 .page{padding:1.5rem}
  
 /* ─── Avatar ──────────────────────────────────────────────── */
-.avatar{width:32px;height:32px;border-radius:50%;background:#9FE1CB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#085041;flex-shrink:0}
-.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#B8ECDA,#9FE1CB);box-shadow:inset 0 0 0 1px rgba(8,80,65,.08)}
+.avatar{width:32px;height:32px;border-radius:50%;background:#9FE1CB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#085041;flex-shrink:0;background-size:cover;background-position:center}
+.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#B8ECDA,#9FE1CB);box-shadow:inset 0 0 0 1px rgba(8,80,65,.08);background-size:cover;background-position:center}
+.avatar.has-photo{color:transparent}
+.avatar-wrap{position:relative;flex-shrink:0}
+.avatar-wrap .photo-edit{position:absolute;right:-3px;bottom:-3px;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;border:2.5px solid var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;box-shadow:var(--shadow-sm);transition:background .12s}
+.avatar-wrap .photo-edit:hover{background:var(--green-dark)}
  
 /* ─── Cards ───────────────────────────────────────────────── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow-sm)}
@@ -244,6 +248,19 @@ tr:hover td{background:#fafaf8}
 .probation-bar{background:#FAEEDA;border:1px solid #FAC775;border-radius:8px;padding:9px 12px;font-size:12px;display:flex;align-items:center;gap:8px;margin-bottom:1rem}
 .doc-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
 .doc-item:last-child{border-bottom:none}
+/* Document checklist rows */
+.doc-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:9px;transition:border-color .12s,box-shadow .12s,background .12s}
+.doc-row.have{cursor:pointer}
+.doc-row.have:hover{border-color:var(--green);box-shadow:var(--shadow);background:var(--hover)}
+.doc-row.missing{border-style:dashed;background:#fcfcfb}
+.doc-row .doc-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.doc-row .doc-ico.have{background:var(--green-light);color:var(--green-dark)}
+.doc-row .doc-ico.missing{background:#f1f0ec;color:var(--faint)}
+.doc-row .doc-main{flex:1;min-width:0}
+.doc-row .doc-type{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.doc-row .doc-sub{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-row .doc-sub.missing{color:var(--faint);font-style:italic}
+.doc-row .doc-actions{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .notif-item{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.875rem;margin-bottom:7px;display:flex;align-items:flex-start;gap:9px}
 .notif-item.na{border-left:3px solid var(--green)}
 .notif-item.nr{border-left:3px solid var(--red)}
@@ -305,7 +322,7 @@ tr:hover td{background:#fafaf8}
 </div>
 <script>
 /* ── Production bootstrap: talks to the real API (no browser mock) ── */
-var _CFG = { empFields: [], payEarn: [], payDed: [] };
+var _CFG = { empFields: [], payEarn: [], payDed: [], docTypes: [] };
  
 function auditLog(action) {
   try {
@@ -329,7 +346,7 @@ async function loadCfg() {
   try {
     const r = await fetch('/api/config', { headers: { 'Authorization': 'Bearer ' + S.token } });
     if (r.ok) { const c = await r.json();
-      _CFG.empFields = c.empFields || []; _CFG.payEarn = c.payEarn || []; _CFG.payDed = c.payDed || []; }
+      _CFG.empFields = c.empFields || []; _CFG.payEarn = c.payEarn || []; _CFG.payDed = c.payDed || []; _CFG.docTypes = c.docTypes || []; }
   } catch (e) {}
 }
  
@@ -346,7 +363,7 @@ function resetDB() {
  
 /* ─── Global State ─────────────────────────────────────────── */
 const API = '';   // empty = same origin; set to 'http://other-server' for remote API
-const CFG = window._CFG || { empFields: [], payEarn: [], payDed: [] };
+const CFG = window._CFG || { empFields: [], payEarn: [], payDed: [], docTypes: [] };
 const LOGO = 'data:image/png;base64,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';
  
 let S = {
@@ -422,6 +439,12 @@ function fmtDate(d) {
 }
 function fmt(v)       { return v || '—'; }
 function getInit(n)   { return (n || '').split(' ').slice(0, 2).map(x => x[0]).join('').toUpperCase(); }
+// Avatar: shows the employee photo if set, otherwise initials. `big` => large profile size.
+function avatarEl(emp, big, extra) {
+  const cls = (big ? 'avatar lg' : 'avatar') + (emp && emp.photo ? ' has-photo' : '');
+  const st  = (extra || '') + (emp && emp.photo ? `;background-image:url('${emp.photo}')` : '');
+  return `<div class="${cls}" style="${st}">${emp && emp.photo ? '' : getInit(emp && emp.name)}</div>`;
+}
 function n2(v)        { return parseFloat(String(v || 0).replace(/,/g, '')) || 0; }
 function aed(v)       { const x = n2(v); return 'AED ' + (x || 0).toLocaleString(); }
 function isInProb(emp){ if (!emp || !emp.joiningDate) return false; return (new Date() - new Date(emp.joiningDate)) / 864e5 < 182; }
@@ -690,7 +713,7 @@ function renderAdmin() {
     ...(can('import_employees') || can('manage_payroll') ? [['import', 'ti-file-upload', 'Bulk Import', '']] : []),
     ...(can('view_leaves') ? [['leaves', 'ti-calendar-event', 'Leaves', pendingLeaves > 0 ? pendingLeaves : '']] : []),
     ...(can('view_payroll') ? [['payroll', 'ti-cash', 'Payroll', '']] : []),
-    ...(can('view_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
+    ...(can('view_documents') || can('upload_documents') || can('review_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
     ...(can('view_accommodation') || can('assign_beds') || can('manage_accommodation') ? [['accommodation', 'ti-bed', 'Accommodation', '']] : []),
     ...(can('view_assets') || can('assign_assets') || can('manage_assets') ? [['assets', 'ti-motorbike', 'Fleet Assets', '']] : []),
     ...(can('view_reports') ? [['reports', 'ti-file-analytics', 'Reports', '']] : []),
@@ -808,9 +831,11 @@ function _expiringCard(emps, field, days, icon, label, onclick) {
 }
 
 function renderDashboard() {
-  const v = S.dashView || 'hr';
-  const tab = (k, label, icon) => `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1px solid ${v === k ? 'var(--green)' : 'var(--border)'};background:${v === k ? 'var(--green)' : '#fff'};color:${v === k ? '#fff' : 'var(--text)'};font-weight:600;font-size:13px;cursor:pointer"><i class="ti ${icon}"></i> ${label}</button>`;
-  const switcher = `<div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>`;
+  const allowed = dashTabsAllowed();
+  let v = S.dashView || allowed[0];
+  if (!allowed.includes(v)) v = allowed[0];
+  const tab = (k, label, icon) => allowed.includes(k) ? `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1px solid ${v === k ? 'var(--green)' : 'var(--border)'};background:${v === k ? 'var(--green)' : '#fff'};color:${v === k ? '#fff' : 'var(--text)'};font-weight:600;font-size:13px;cursor:pointer"><i class="ti ${icon}"></i> ${label}</button>` : '';
+  const switcher = allowed.length > 1 ? `<div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>` : '';
   const body = v === 'onb' ? renderDashONB() : v === 'ops' ? renderDashOps() : renderDashHR();
   return switcher + body;
 }
@@ -821,7 +846,6 @@ function renderDashONB() {
   const have = f => es.filter(e => e[f]).length;
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
     ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', n.toLocaleString(), 'all records', "viewDashMetric('total_emp')")}
-    ${_progCard('ti-calendar-event', 'var(--green)', 'var(--green-light)', 'Joining date set', have('joiningDate'), n, "viewDashMetric('onb_joining')")}
     ${_progCard('ti-school', '#7A5AF8', '#EEEAFB', 'Induction completed', have('inductionDate'), n, "viewDashMetric('onb_induction')")}
     ${_progCard('ti-stethoscope', 'var(--green)', 'var(--green-light)', 'Medical done', have('medicalDate'), n, "viewDashMetric('onb_medical')")}
     ${_progCard('ti-fingerprint', '#185FA5', '#E6F1FB', 'Biometric done', have('biometricDate'), n, "viewDashMetric('onb_biometric')")}
@@ -970,7 +994,18 @@ function renderSettingsPage() {
   return `<div class="alert alert-i"><i class="ti ti-info-circle"></i><div>Entities added here appear automatically in employee profiles &amp; edit forms, in the import/export templates, and on payslips. Removing one hides it but does not delete saved data.</div></div>
   ${list(CFG.empFields, 'emp', 'Employee profile — custom fields', 'shown on profile + edit form + templates')}
   ${list(CFG.payEarn, 'earn', 'Payroll — extra EARNING entities', 'added to payroll template + payslip earnings')}
-  ${list(CFG.payDed, 'ded', 'Payroll — extra DEDUCTION entities', 'added to payroll template + payslip deductions')}`;
+  ${list(CFG.payDed, 'ded', 'Payroll — extra DEDUCTION entities', 'added to payroll template + payslip deductions')}
+  <div class="card">
+    <div class="card-head"><h3>Document fields</h3><span style="font-size:11px;color:var(--muted)">extra slots in every employee's document checklist</span></div>
+    <div class="card-body">
+      ${(CFG.docTypes || []).length === 0 ? `<p style="color:var(--muted);font-size:12px;margin-bottom:8px">Only the built-in fields (Passport, Visa, Emirates ID, Residence/Labour, Contract, Medical) are shown. Add more below.</p>` : ''}
+      ${(CFG.docTypes || []).map((x, i) => `<div class="doc-item"><span style="font-size:13px"><i class="ti ${x.icon||'ti-file-text'}" style="color:var(--muted)"></i> ${x.label}</span>
+        <button class="btn sm" style="color:var(--red)" onclick="rmDocField(${i})"><i class="ti ti-trash"></i></button></div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input id="add-doc" placeholder="New document field… e.g. Driving Licence" style="flex:1"/>
+        <button class="btn g" onclick="addDocField(true)"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div></div>`;
 }
 function addEntity(kind) {
   const v = (document.getElementById('add-' + kind)?.value || '').trim();
@@ -984,6 +1019,23 @@ function rmEntity(kind, i) {
   const arr = kind === 'emp' ? CFG.empFields : kind === 'earn' ? CFG.payEarn : CFG.payDed;
   auditLog('Removed ' + (kind === 'emp' ? 'employee custom field' : 'payroll entity') + ': ' + (arr[i].label || arr[i]));
   arr.splice(i, 1); saveDB(); R();
+}
+// Custom document fields (extra checklist slots, e.g. "Driving Licence", "Insurance Card").
+function addDocField(fromSettings) {
+  if (!canManageDocTypes()) { alert('You do not have permission to add document fields.'); return; }
+  const v = (fromSettings ? (document.getElementById('add-doc')?.value || '') : (prompt('New document field name (e.g. Driving Licence, Insurance Card):') || '')).trim();
+  if (!v) return;
+  const key = 'doc_' + v.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  CFG.docTypes = CFG.docTypes || [];
+  if (CFG.docTypes.some(t => t.key === key)) { alert('That document field already exists.'); return; }
+  CFG.docTypes.push({ key, label: v, icon: 'ti-file-text' });
+  saveDB(); auditLog('Added document field: ' + v); R();
+}
+function rmDocField(i) {
+  if (!canManageDocTypes()) return;
+  if (!confirm('Remove this document field? Uploaded files are kept and will appear under "Other documents".')) return;
+  auditLog('Removed document field: ' + (CFG.docTypes[i]?.label || ''));
+  CFG.docTypes.splice(i, 1); saveDB(); R();
 }
  
 /* ─── Dashboard Metrics Viewer ───────────────────────── */
@@ -1023,20 +1075,19 @@ function renderDashMetricModal() {
   const A = S.assets || [];
   const bk = A.filter(a => a.type === 'bike'); const sm = A.filter(a => a.type === 'sim');
   const byA = (arr, st) => arr.filter(a => (a.status || '') === st);
-  const dateCol = (field, lbl) => ({ head: empHead + `<th>Position</th><th>${lbl}</th>`, rows: [...es].sort((a, b) => (a[field] ? 1 : 0) - (b[field] ? 1 : 0)).map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e[field] ? fmtDate(e[field]) : '<span style=\"color:var(--red);font-weight:600\">Missing</span>'}</td></tr>`).join('') });
+  const dateCol = (field, lbl) => ({ head: empHead + `<th>Joining date</th><th>Position</th><th>${lbl}</th>`, rows: [...es].sort((a, b) => (a[field] ? 1 : 0) - (b[field] ? 1 : 0)).map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.joiningDate ? fmtDate(e.joiningDate) : '—'}</td><td>${e.position || '—'}</td><td>${e[field] ? fmtDate(e[field]) : '<span style=\"color:var(--red);font-weight:600\">Missing</span>'}</td></tr>`).join('') });
   const expCol = (field, lbl) => ({ head: empHead + `<th>${lbl}</th><th>Days left</th>`, rows: es.filter(e => e[field] && e[field] <= cutoff90).sort((a, b) => String(a[field]).localeCompare(String(b[field]))).map(e => { const nn = dleft(e[field]); return `<tr ${rowClick(e)}>${empCells(e)}<td style=\"color:${nn<=30?'var(--red)':'var(--text)'};font-weight:${nn<=30?'700':'400'}\">${fmtDate(e[field])}</td><td>${nn} days</td></tr>`; }).join('') });
-  const pipeCol = (list, exHead, exCell) => ({ head: empHead + '<th>Position</th>' + (exHead || ''), rows: list.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td>${exCell ? exCell(e) : ''}</tr>`).join('') });
+  const pipeCol = (list, exHead, exCell) => ({ head: empHead + '<th>Joining date</th><th>Position</th>' + (exHead || ''), rows: list.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.joiningDate ? fmtDate(e.joiningDate) : '—'}</td><td>${e.position || '—'}</td>${exCell ? exCell(e) : ''}</tr>`).join('') });
   const assetCol = (list) => ({ head: '<th>Code</th><th>Status</th><th>Holder</th><th>Assigned</th>', rows: list.map(a => `<tr><td><b>${a.code || '—'}</b></td><td>${a.status || '—'}</td><td>${a.holderName || a.holderCode || '—'}</td><td>${a.assignedDate ? fmtDate(a.assignedDate) : '—'}</td></tr>`).join('') });
 
   let title = '', headHTML = '', rowsHTML = '', note = '', isEmpTable = true;
-  if (m.key === 'total_emp')        { title = 'All employees';            headHTML = empHead + '<th>Position</th><th>Status</th>'; rowsHTML = es.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.status || '—'}</td></tr>`).join(''); }
-  else if (m.key === 'active_emp')  { title = 'Active & working';         headHTML = empHead + '<th>Position</th><th>Location</th>'; rowsHTML = working.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td><td>${e.location || '—'}</td></tr>`).join(''); }
+  if (m.key === 'total_emp')        { title = 'All employees';            headHTML = empHead + '<th>Joining date</th><th>Position</th><th>Status</th>'; rowsHTML = es.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.joiningDate ? fmtDate(e.joiningDate) : '—'}</td><td>${e.position || '—'}</td><td>${e.status || '—'}</td></tr>`).join(''); }
+  else if (m.key === 'active_emp')  { title = 'Active & working';         headHTML = empHead + '<th>Joining date</th><th>Position</th><th>Location</th>'; rowsHTML = working.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.joiningDate ? fmtDate(e.joiningDate) : '—'}</td><td>${e.position || '—'}</td><td>${e.location || '—'}</td></tr>`).join(''); }
   else if (m.key === 'on_leave')    { title = 'On leave today';           headHTML = empHead + '<th>Leave type</th><th>Dates</th>'; rowsHTML = onLeave.map(e => { const l = leaveOf[e.id] || {}; return `<tr ${rowClick(e)}>${empCells(e)}<td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td></tr>`; }).join(''); }
-  else if (m.key === 'inactive')    { title = 'Inactive employees';       headHTML = empHead + '<th>Position</th>'; rowsHTML = inactive.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.position || '—'}</td></tr>`).join(''); }
+  else if (m.key === 'inactive')    { title = 'Inactive employees';       headHTML = empHead + '<th>Joining date</th><th>Position</th>'; rowsHTML = inactive.map(e => `<tr ${rowClick(e)}>${empCells(e)}<td>${e.joiningDate ? fmtDate(e.joiningDate) : '—'}</td><td>${e.position || '—'}</td></tr>`).join(''); }
   else if (m.key === 'visa_expiring'){ title = 'Visas expiring ≤90 days'; headHTML = empHead + '<th>Visa expiry</th><th>Days left</th>'; rowsHTML = visaExp.map(e => { const n = dleft(e.evisaExpiry); return `<tr ${rowClick(e)}>${empCells(e)}<td style="color:${n<=30?'var(--red)':'var(--text)'};font-weight:${n<=30?'700':'400'}">${fmtDate(e.evisaExpiry)}</td><td>${n} days</td></tr>`; }).join(''); }
   else if (m.key === 'pending_leaves'){ title = 'Pending leave requests'; headHTML = '<th>Emp ID</th><th>Name</th><th>Type</th><th>From → To</th><th>Days</th><th>Applied</th>'; rowsHTML = pending.map(l => `<tr><td><b>${l.empId || '—'}</b></td><td>${l.empName || '—'}</td><td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td><td>${l.days || '—'}</td><td>${fmtDate(l.appliedOn)}</td></tr>`).join(''); }
   else if (m.key === 'payroll')     { title = 'Monthly payroll'; note = `<p style="font-size:15px"><b>Total net pay:</b> <span style="color:var(--green);font-weight:700">${aed(payTot)}</span> across ${(S.payslips||[]).length} payslip(s).</p>`; }
-  else if (m.key === 'onb_joining')   { title = 'Joining date status'; const r = dateCol('joiningDate', 'Joining date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_induction'){ title = 'Induction status'; const r = dateCol('inductionDate', 'Induction date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_medical')  { title = 'Medical status'; const r = dateCol('medicalDate', 'Medical date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_biometric'){ title = 'Biometric status'; const r = dateCol('biometricDate', 'Biometric date'); headHTML = r.head; rowsHTML = r.rows; }
@@ -1192,7 +1243,7 @@ function renderEmpList() {
       : emps.map(e => `<tr>
           <td style="cursor:pointer" onclick="viewEmp('${e.id}')">
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="avatar" style="width:26px;height:26px;font-size:9px;${e.status==='Inactive'?'opacity:0.4':''}">${getInit(e.name)}</div>
+              ${avatarEl(e, false, `width:28px;height:28px;font-size:9px;${e.status==='Inactive'?'opacity:0.4':''}`)}
               ${e.name}
             </div>
           </td>
@@ -1483,7 +1534,13 @@ function renderCertModal() {
         ${l.certDocId ? `<button class="btn sm g" style="flex-shrink:0" onclick="viewDoc('${l.certDocId}')"><i class="ti ti-eye"></i> View</button>` : `<span style="font-size:11px;color:var(--faint);flex-shrink:0">no file linked</span>`}
       </div>
     </div>
-    <div class="modal-foot"><button class="btn" onclick="openModal(null)">Close</button></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="openModal(null)">Close</button>
+      ${l.status === 'Pending' && (S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('approve_leaves'))
+        ? `<button class="btn r" onclick="decideLeave('${l.id}','Rejected')"><i class="ti ti-x"></i> Reject</button>
+           <button class="btn g" onclick="decideLeave('${l.id}','Approved')"><i class="ti ti-check"></i> Approve leave</button>`
+        : l.status !== 'Pending' ? `<span class="badge ${l.status==='Approved'?'bg':'br'}" style="align-self:center">${l.status}${l.decidedBy ? ' by '+l.decidedBy : ''}</span>` : ''}
+    </div>
   </div></div>`;
 }
  
@@ -1529,19 +1586,26 @@ async function bulkDocUpload(files) {
   const totalMatched = groups.reduce((s, g) => s + g.files.length, 0);
   if (!totalMatched) { alert('No files matched an employee-number folder.\nName each subfolder with the employee number (e.g. 30001) so files land on the right profile.'); return; }
   if (!confirm(`Upload ${totalMatched} file(s) to ${groups.length} employee profile(s)?` + (unmatched.length ? `\n${unmatched.length} file(s) are not inside an employee-number folder and will be skipped.` : ''))) return;
-  let okN = 0; const fail = [];
+  const cats = allDocCategories();
+  let okN = 0, typedN = 0; const fail = [];
   for (const g of groups) {
     for (const f of g.files) {
+      // Map the filename to a document type so it lands in the right checklist slot (e.g. "passport.pdf" \u2192 Passport)
+      const probe = { name: f.name, type: '' };
+      const cat = cats.find(c => docMatchesCat(probe, c));
+      const docType = cat ? cat.label : 'Other';
+      if (cat) typedN++;
       const fd = new FormData();
       fd.append('employeeId', g.emp.id);
-      fd.append('name', f.name || 'document');
+      fd.append('name', cat ? cat.label : (f.name || 'document'));
+      fd.append('type', docType);
       fd.append('category', 'employee');
       fd.append('file', f);
       try { await api('POST', '/documents', fd, true); okN++; } catch (e) { fail.push(f.name + ' \u2014 ' + e.message); }
     }
   }
   S.documents = await api('GET', '/documents');
-  alert(`\u2713 ${okN} document(s) uploaded to their employee profiles.` + (unmatched.length ? `\n\u2022 ${unmatched.length} skipped (not in an employee-number folder).` : '') + (fail.length ? `\n\u2717 Failed:\n` + fail.join('\n') : ''));
+  alert(`\u2713 ${okN} document(s) uploaded to their employee profiles.\n\u2022 ${typedN} auto-sorted into the right slot (Passport, Visa, EID, \u2026) by filename.` + (unmatched.length ? `\n\u2022 ${unmatched.length} skipped (not in an employee-number folder).` : '') + (fail.length ? `\n\u2717 Failed:\n` + fail.join('\n') : ''));
   R();
 }
  
@@ -1578,7 +1642,9 @@ function renderDocsPage() {
   return `<div class="card">
     <div class="card-head">
       <h3>Documents</h3>
-      <div style="display:flex;gap:7px">${canUp ? `
+      <div style="display:flex;gap:7px">
+        ${canManageDocTypes() ? `<button class="btn" onclick="addDocField()"><i class="ti ti-plus"></i> Add field</button>` : ''}
+        ${canUp ? `
         <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-folder-up"></i> Bulk upload</button>
         <input type="file" id="bulkdocs" webkitdirectory multiple style="display:none" onchange="bulkDocUpload(this.files)">
         <button class="btn g" onclick="openModal('uploadDoc')"><i class="ti ti-upload"></i> Upload</button>` : ''}
@@ -1605,16 +1671,14 @@ function renderDocsPage() {
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
             ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
-            ${canUp ? `<div style="position:relative;display:inline-block">
-              <select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
-                <option value="">Review…</option>
-                <option value="Approved">✓ Approve</option>
-                <option value="Reviewed">👁 Mark Reviewed</option>
-                <option value="Rejected">✗ Reject</option>
-                <option value="Pending">↺ Reset</option>
-              </select>
-            </div>
-            <button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
+            ${canReviewDocs() ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
+              <option value="">Review…</option>
+              <option value="Approved">✓ Approve</option>
+              <option value="Reviewed">👁 Mark Reviewed</option>
+              <option value="Rejected">✗ Reject</option>
+              <option value="Pending">↺ Reset</option>
+            </select>` : ''}
+            ${canUp ? `<button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
           </div>
         </div>`).join('')}
     </div>
@@ -1639,8 +1703,12 @@ function renderEmpDetail() {
   const tab  = S.profileTab;
  
   const joinedStr = e.joiningDate ? new Date(e.joiningDate).toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) : '';
+  const canEditPhoto = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('edit_employees');
   return `<div class="profile-header">
-    <div class="avatar lg" style="${e.status==='Inactive'?'opacity:0.4':''}">${getInit(e.name)}</div>
+    <div class="avatar-wrap">
+      ${avatarEl(e, true, e.status==='Inactive'?'opacity:0.4':'')}
+      ${canEditPhoto ? `<div class="photo-edit" title="Change photo" onclick="changePhoto('${e.id}')"><i class="ti ti-camera"></i></div>` : ''}
+    </div>
     <div style="flex:1;min-width:0">
       <div class="profile-name">${e.status==='Active'?'<span class="live-dot"></span>':''}${e.name}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 2px">
@@ -1728,7 +1796,19 @@ function renderEmploymentTab(e) {
     <div class="info-cell"><div class="lbl">IBAN</div><div class="val" style="font-family:monospace;font-size:11px">${fmt(e.iban)||'—'}</div></div>
   </div>
   ${(CFG.empFields || []).length ? `<div class="section-label">Additional fields</div>
-  <div class="info-grid">${CFG.empFields.map(f => `<div class="info-cell"><div class="lbl">${f.label}</div><div class="val">${fmt(e['cf_' + f.key]) || '—'}</div></div>`).join('')}</div>` : ''}`;
+  <div class="info-grid">${CFG.empFields.map(f => `<div class="info-cell"><div class="lbl">${f.label}</div><div class="val">${fmt(e['cf_' + f.key]) || '—'}</div></div>`).join('')}</div>` : ''}
+  <div class="sec-head" style="justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:9px"><div class="sec-ico"><i class="ti ti-route"></i></div><h4>Onboarding milestones</h4></div>
+    ${canUpdateAnyOnb() ? `<button class="btn g sm" onclick="openOnbModal('${e.id}')"><i class="ti ti-calendar-plus"></i> Update onboarding</button>` : ''}
+  </div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Induction date</div><div class="val">${fmtDate(e.inductionDate)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Medical date</div><div class="val">${fmtDate(e.medicalDate)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Biometric date</div><div class="val">${fmtDate(e.biometricDate)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">EID received date</div><div class="val">${fmtDate(e.eidDate)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Driving licence date</div><div class="val">${fmtDate(e.dlDate)||'—'}</div></div>
+    <div class="info-cell"><div class="lbl">Deployment date</div><div class="val">${fmtDate(e.deploymentDate)||'—'}</div></div>
+  </div>`;
 }
  
 function renderLeavesTab(e, leaves, bal, isAdmin) {
@@ -1797,37 +1877,95 @@ function renderPayslipsTab(payslips) {
   </div>`).join('');
 }
  
+/* Standard document types we expect on file. A doc matches by keyword in its type or name. */
+const DOC_CATEGORIES = [
+  { key: 'passport',  label: 'Passport',          icon: 'ti-book-2',       kw: ['passport'] },
+  { key: 'visa',      label: 'Visa / E-visa',      icon: 'ti-plane',        kw: ['visa', 'e-visa', 'evisa'] },
+  { key: 'eid',       label: 'Emirates ID',        icon: 'ti-id',           kw: ['eid', 'emirates', 'emirate id'] },
+  { key: 'residence', label: 'Residence / Labour', icon: 'ti-home-2',       kw: ['residence', 'residency', 'labour', 'labor'] },
+  { key: 'contract',  label: 'Contract',           icon: 'ti-file-text',    kw: ['contract', 'offer'] },
+  { key: 'medical',   label: 'Medical / Fitness',  icon: 'ti-stethoscope',  kw: ['medical', 'fitness', 'health'] },
+];
+// Built-in categories + any custom document fields the admin added (stored in config).
+function allDocCategories() {
+  const custom = (CFG.docTypes || []).map(t => ({
+    key: t.key, label: t.label, icon: t.icon || 'ti-file-text', custom: true,
+    kw: [String(t.label || '').toLowerCase(), ...String(t.label || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2)]
+  }));
+  return DOC_CATEGORIES.concat(custom);
+}
+function docMatchesCat(d, cat) {
+  const hay = ((d.type || '') + ' ' + (d.name || '')).toLowerCase();
+  return cat.kw.some(k => k && hay.includes(k));
+}
+function canManageDocTypes() { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('manage_settings'); }
+function canReviewDocs() { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_documents') || (S.user?.permissions||[]).includes('review_documents'); }
+function docRowActions(d, isAdmin) {
+  const canDelete = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_documents');
+  return `<div class="doc-actions" onclick="event.stopPropagation()">
+    ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="Open / download"><i class="ti ti-eye"></i> Open</button>` : ''}
+    ${isAdmin && canReviewDocs() ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" title="Review" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
+      <option value="">Review…</option>
+      <option value="Approved">✓ Approve</option>
+      <option value="Reviewed">👁 Mark reviewed</option>
+      <option value="Rejected">✗ Reject</option>
+      <option value="Pending">↺ Reset</option>
+    </select>` : ''}
+    ${isAdmin && canDelete ? `<button class="btn sm" style="color:var(--red)" title="Delete" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
+  </div>`;
+}
+// The reusable checklist: one row per standard document type, plus any extra uploads under "Other".
+function docChecklist(docs, opts) {
+  const isAdmin = !!opts.isAdmin;
+  const canUpload = opts.canUpload !== false;
+  const used = new Set();
+  const rows = allDocCategories().map(cat => {
+    const d = docs.find(x => !used.has(x.id) && docMatchesCat(x, cat));
+    if (d) {
+      used.add(d.id);
+      return `<div class="doc-row have" onclick="viewDoc('${d.id}')">
+        <div class="doc-ico have"><i class="ti ${cat.icon}"></i></div>
+        <div class="doc-main">
+          <div class="doc-type">${cat.label} ${docReviewBadge(d.reviewStatus)}</div>
+          <div class="doc-sub">${d.name} · uploaded ${fmtDate(d.uploadedAt)}${d.uploader ? ` by ${d.uploader}` : ''}</div>
+        </div>
+        ${docRowActions(d, isAdmin)}
+      </div>`;
+    }
+    return `<div class="doc-row missing">
+      <div class="doc-ico missing"><i class="ti ${cat.icon}"></i></div>
+      <div class="doc-main">
+        <div class="doc-type" style="color:var(--muted)">${cat.label}</div>
+        <div class="doc-sub missing">Not uploaded yet</div>
+      </div>
+      <div class="doc-actions">${canUpload ? `<button class="btn sm b" onclick="openModal('${opts.uploadModal}')"><i class="ti ti-upload"></i> Upload</button>` : `<span class="badge bgr" style="font-size:10px">Missing</span>`}</div>
+    </div>`;
+  }).join('');
+  const extras = docs.filter(x => !used.has(x.id));
+  const extraRows = extras.length ? `<div class="section-label" style="margin-top:1.2rem">Other documents</div>` + extras.map(d => `
+    <div class="doc-row have" onclick="viewDoc('${d.id}')">
+      <div class="doc-ico have"><i class="ti ${docFileIcon(d.type)}"></i></div>
+      <div class="doc-main">
+        <div class="doc-type">${d.name} ${docReviewBadge(d.reviewStatus)}</div>
+        <div class="doc-sub">${d.type || 'Document'} · uploaded ${fmtDate(d.uploadedAt)}${d.uploader ? ` by ${d.uploader}` : ''}</div>
+      </div>
+      ${docRowActions(d, isAdmin)}
+    </div>`).join('') : '';
+  return rows + extraRows;
+}
+
 function renderDocumentsTab(docs, empId, isAdmin) {
+  const cats = allDocCategories();
+  const required = cats.filter(c => docs.some(d => docMatchesCat(d, c))).length;
   return `<div class="card">
-    <div class="card-head"><h3>${docs.length} document${docs.length!==1?'s':''}</h3>
-      <button class="btn g" onclick="openModal('uploadDocEmp')"><i class="ti ti-upload"></i> Upload</button>
+    <div class="card-head">
+      <h3>Documents <span style="font-weight:500;color:var(--muted);font-size:12px">· ${required}/${cats.length} key docs on file</span></h3>
+      <div style="display:flex;gap:7px">
+        ${canManageDocTypes() ? `<button class="btn" onclick="addDocField()"><i class="ti ti-plus"></i> Add field</button>` : ''}
+        <button class="btn g" onclick="openModal('uploadDocEmp')"><i class="ti ti-upload"></i> Upload</button>
+      </div>
     </div>
-    <div class="card-body">${docs.length === 0
-      ? `<div class="upload-zone" onclick="openModal('uploadDocEmp')"><i class="ti ti-cloud-upload" style="font-size:24px;color:var(--muted)"></i><div style="margin-top:6px;font-size:13px;font-weight:600">Upload documents</div></div>`
-      : docs.map(d => `<div class="doc-item">
-          <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
-            <i class="ti ${docFileIcon(d.type)}"></i>
-          </div>
-          <div style="flex:1;min-width:0;margin-left:10px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-              <b style="font-size:13px">${d.name}</b>
-              ${docReviewBadge(d.reviewStatus)}
-            </div>
-            <span style="font-size:11px;color:var(--muted)">${d.type||'—'} · ${fmtDate(d.uploadedAt)}${d.uploader ? ` · ${d.uploader}` : ''}${d.reviewedBy ? ` · reviewed by ${d.reviewedBy}` : ''}</span>
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
-            ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
-            ${isAdmin ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
-              <option value="">Review…</option>
-              <option value="Approved">✓ Approve</option>
-              <option value="Reviewed">👁 Mark Reviewed</option>
-              <option value="Rejected">✗ Reject</option>
-              <option value="Pending">↺ Reset</option>
-            </select>
-            <button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
-          </div>
-        </div>`).join('')}
-    </div>
+    <div class="card-body">${docChecklist(docs, { isAdmin, uploadModal: 'uploadDocEmp' })}</div>
   </div>`;
 }
  
@@ -2005,7 +2143,10 @@ function renderEmpSelfProfile(emp, prob) {
   if (!emp) return `<div class="loading"><i class="ti ti-loader"></i>Loading…</div>`;
   const joinedStr = emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'short',day:'numeric'}) : '';
   return `<div class="profile-header">
-    <div class="avatar lg">${getInit(emp.name)}</div>
+    <div class="avatar-wrap">
+      ${avatarEl(emp, true)}
+      <div class="photo-edit" title="Change your photo" onclick="changePhoto('${emp.id}')"><i class="ti ti-camera"></i></div>
+    </div>
     <div style="flex:1;min-width:0">
       <div class="profile-name">${emp.status==='Active'?'<span class="live-dot"></span>':''}${emp.name}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin:8px 0 2px">
@@ -2128,30 +2269,16 @@ function renderEmpPayslipsTab(payslips) {
 }
  
 function renderEmpDocsTab(docs) {
+  const cats = allDocCategories();
+  const required = cats.filter(c => docs.some(d => docMatchesCat(d, c))).length;
   return `<div class="card">
     <div class="card-head">
-      <h3>${docs.length} document${docs.length!==1?'s':''}</h3>
+      <h3>My documents <span style="font-weight:500;color:var(--muted);font-size:12px">· ${required}/${cats.length} key docs on file</span></h3>
       <button class="btn g" onclick="openModal('uploadDocSelf')"><i class="ti ti-upload"></i> Upload</button>
     </div>
-    <div class="card-body">${docs.length === 0
-      ? `<div class="upload-zone" onclick="openModal('uploadDocSelf')">
-          <i class="ti ti-cloud-upload" style="font-size:28px;color:var(--muted)"></i>
-          <div style="margin-top:8px;font-size:13px;font-weight:600">Upload your documents</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Passport, visa, EID, contracts and more</div>
-        </div>`
-      : docs.map(d => `<div class="doc-item">
-          <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
-            <i class="ti ${docFileIcon(d.type)}"></i>
-          </div>
-          <div style="flex:1;min-width:0;margin-left:10px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-              <b style="font-size:13px">${d.name}</b>
-              ${docReviewBadge(d.reviewStatus)}
-            </div>
-            <span style="font-size:11px;color:var(--muted)">${d.type||'—'} · ${fmtDate(d.uploadedAt)}</span>
-          </div>
-          ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
-        </div>`).join('')}
+    <div class="card-body">
+      <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>Tap any document below to open it. Rows marked <i>Not uploaded yet</i> still need a file — use Upload to add yours.</div></div>
+      ${docChecklist(docs, { isAdmin: false, uploadModal: 'uploadDocSelf' })}
     </div>
   </div>`;
 }
@@ -2193,7 +2320,50 @@ function renderModal() {
   if (m === 'accExit')                          return renderAccExitModal();
   if (m === 'assetReturn')                      return renderAssetReturnModal();
   if (m === 'assetImport')                      return renderAssetImportModal();
+  if (m === 'updateOnb')                        return renderOnbModal();
   return '';
+}
+
+function openOnbModal(empId) {
+  const e = (S.employees || []).find(x => x.id === empId) || S.viewEmp;
+  S.onbEmp = e ? { ...e } : null;
+  openModal('updateOnb');
+}
+function renderOnbModal() {
+  const e = S.onbEmp; if (!e) return '';
+  const editable = ONBOARDING_FIELDS.filter(f => canUpdateOnbField(f.perm));
+  const locked   = ONBOARDING_FIELDS.filter(f => !canUpdateOnbField(f.perm));
+  return `<div class="modal-overlay" onclick="closeModal(event)"><div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="modal-head"><h3>Update onboarding — ${e.name}</h3><button class="close-btn" onclick="openModal(null)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>You can update the milestone date(s) you have permission for. Leave a field unchanged to keep its current value.</div></div>
+      <div class="form-grid">
+        ${editable.map(f => `<div class="field"><label>${f.label}</label><input id="onb_${f.field}" type="date" value="${e[f.field] || ''}"/></div>`).join('')}
+      </div>
+      ${locked.length ? `<div class="section-label" style="margin-top:1rem">Locked (no permission)</div>
+      <div class="form-grid">${locked.map(f => `<div class="field"><label>${f.label}</label><input type="date" value="${e[f.field] || ''}" disabled style="background:#f1f0ec;color:var(--muted)"/></div>`).join('')}</div>` : ''}
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="openModal(null)">Cancel</button>
+      <button class="btn g" onclick="saveOnboarding('${e.id}')">Save dates</button>
+    </div>
+  </div></div>`;
+}
+async function saveOnboarding(empId) {
+  const body = {};
+  for (const f of ONBOARDING_FIELDS) {
+    if (!canUpdateOnbField(f.perm)) continue;
+    const el = document.getElementById('onb_' + f.field);
+    if (el) body[f.field] = el.value || '';
+  }
+  try {
+    const res = await api('PATCH', `/employees/${empId}/onboarding`, body);
+    S.employees = await api('GET', '/employees');
+    if (S.viewEmp && S.viewEmp.id === empId) { const fresh = S.employees.find(x => x.id === empId); if (fresh) S.viewEmp = fresh; }
+    S.modal = null; S.onbEmp = null;
+    R();
+    auditLog && auditLog(`Onboarding updated: ${(res.applied||[]).join(', ')}`);
+  } catch (e) { alert('Error: ' + e.message); }
 }
  
 function renderDeleteEmpModal() {
@@ -2389,8 +2559,8 @@ function renderDocModal() {
       </div>` : ''}
       <div class="field"><label>Document name</label><input id="dn" placeholder="e.g. Passport Copy"/></div>
       <div class="field"><label>Type</label><select id="dtype">
-        <option>Passport</option><option>Visa</option><option>Contract</option>
-        <option>EID</option><option>Medical</option><option>Certificate</option><option>Other</option>
+        ${allDocCategories().map(c => `<option>${c.label}</option>`).join('')}
+        <option>Certificate</option><option>Other</option>
       </select></div>
       <div class="field full">
         <div class="upload-zone" style="padding:1.25rem" onclick="document.getElementById('docfile').click()">
@@ -2546,6 +2716,7 @@ async function decideLeave(id, decision) {
   try {
     const res = await api('PATCH', `/leaves/${id}/decide`, { decision, by: S.user?.name || '' });
     S.leaves  = await api('GET', '/leaves');
+    if (S.modal === 'viewCert') { S.modal = null; S.viewCertLeave = null; }
     auditLog(`Leave ${id}: ${res.message}`);
     alert(`✓ ${res.message}!\n\n${res.emailPreview?.body || ''}`);
     R();
@@ -2586,6 +2757,39 @@ async function reviewDoc(id, status) {
     S.documents = await api('GET', '/documents');
     R();
   } catch (e) { alert('Error: ' + e.message); }
+}
+
+// Profile photo: pick a file, resize it to a small square thumbnail in the browser, then save as base64.
+function changePhoto(empId) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) uploadPhotoFile(f, empId); };
+  inp.click();
+}
+function uploadPhotoFile(file, empId) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = async () => {
+      try {
+        const size = 320;
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        const dataUrl = cv.toDataURL('image/jpeg', 0.82);
+        await api('POST', `/employees/${empId}/photo`, { photo: dataUrl });
+        if (S.viewEmp && S.viewEmp.id === empId) S.viewEmp.photo = dataUrl;
+        S.employees = await api('GET', '/employees');
+        if (S.viewEmp && S.viewEmp.id === empId) { const fresh = S.employees.find(x => x.id === empId); if (fresh) S.viewEmp = fresh; }
+        R();
+      } catch (e) { alert('Could not save photo: ' + e.message); }
+    };
+    img.onerror = () => alert('That file could not be read as an image.');
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
 }
  
 function confirmDeleteEmployee(id, name) {
@@ -2880,6 +3084,9 @@ async function publishPayroll() {
  
 /* ─── Admin Users Page ─────────────────────────────────────── */
 const ALL_PERMISSIONS = [
+  ['view_dashboard_hr',   'View HR dashboard'],
+  ['view_dashboard_onb',  'View Onboarding dashboard'],
+  ['view_dashboard_ops',  'View Operations dashboard'],
   ['view_employees',      'View employees'],
   ['add_employees',       'Add new employees'],
   ['edit_employees',      'Edit employee details'],
@@ -2892,6 +3099,7 @@ const ALL_PERMISSIONS = [
   ['manage_payroll',      'Upload / manage payroll'],
   ['view_documents',      'View documents'],
   ['upload_documents',    'Upload / manage documents'],
+  ['review_documents',    'Review documents (approve / reject)'],
   ['view_accommodation',  'View accommodation & allocations'],
   ['assign_beds',         'Assign / vacate beds'],
   ['manage_accommodation','Manage camps & rooms'],
@@ -2902,17 +3110,46 @@ const ALL_PERMISSIONS = [
   ['view_reports',        'View & download reports'],
   ['view_audit',          'View audit log'],
   ['manage_settings',     'Manage custom fields & settings'],
+  // Granular onboarding-milestone permissions — let an admin update only specific dates
+  ['update_induction_date',  'Update induction date'],
+  ['update_medical_date',    'Update medical date'],
+  ['update_biometric_date',  'Update biometric date'],
+  ['update_eid_date',        'Update EID received date'],
+  ['update_license_date',    'Update driving licence date'],
+  ['update_deployment_date', 'Update deployment date'],
 ];
+// Onboarding milestone fields an admin may be granted individually (field -> { perm, label })
+const ONBOARDING_FIELDS = [
+  { field: 'inductionDate',  perm: 'update_induction_date',  label: 'Induction date' },
+  { field: 'medicalDate',    perm: 'update_medical_date',    label: 'Medical date' },
+  { field: 'biometricDate',  perm: 'update_biometric_date',  label: 'Biometric date' },
+  { field: 'eidDate',        perm: 'update_eid_date',        label: 'EID received date' },
+  { field: 'dlDate',         perm: 'update_license_date',    label: 'Driving licence date' },
+  { field: 'deploymentDate', perm: 'update_deployment_date', label: 'Deployment date' },
+];
+function canUpdateOnbField(perm) { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('edit_employees') || (S.user?.permissions||[]).includes(perm); }
+function canUpdateAnyOnb() { return S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('edit_employees') || ONBOARDING_FIELDS.some(f => (S.user?.permissions||[]).includes(f.perm)); }
 // grouped view for the admin permission picker (lookups still use the flat list above)
 const PERM_GROUPS = [
+  ['Dashboards',       ['view_dashboard_hr', 'view_dashboard_onb', 'view_dashboard_ops']],
   ['Employees',        ['view_employees', 'add_employees', 'edit_employees', 'delete_employees', 'import_employees', 'export_data']],
   ['Leave',            ['view_leaves', 'approve_leaves']],
   ['Payroll',          ['view_payroll', 'manage_payroll']],
-  ['Documents',        ['view_documents', 'upload_documents']],
+  ['Documents',        ['view_documents', 'upload_documents', 'review_documents']],
   ['Accommodation',    ['view_accommodation', 'assign_beds', 'manage_accommodation']],
   ['Fleet assets',     ['view_assets', 'assign_assets', 'manage_assets', 'import_assets']],
+  ['Onboarding dates', ['update_induction_date', 'update_medical_date', 'update_biometric_date', 'update_eid_date', 'update_license_date', 'update_deployment_date']],
   ['Reports & system', ['view_reports', 'view_audit', 'manage_settings']],
 ];
+// Which dashboard tabs an admin may see. If they hold NONE of the three dashboard perms,
+// they keep legacy full access (all three); granting any one restricts them to just those.
+function dashTabsAllowed() {
+  if (S.user?.isSuperAdmin) return ['hr', 'onb', 'ops'];
+  const p = S.user?.permissions || [];
+  const map = { hr: 'view_dashboard_hr', onb: 'view_dashboard_onb', ops: 'view_dashboard_ops' };
+  const granted = Object.entries(map).filter(([, perm]) => p.includes(perm)).map(([k]) => k);
+  return granted.length ? granted : ['hr', 'onb', 'ops'];
+}
 const labelOf = (k) => (ALL_PERMISSIONS.find(p => p[0] === k) || [k, k])[1];
  
 function renderAdminsPage() {

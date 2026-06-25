@@ -157,6 +157,65 @@ app.delete('/api/employees/:id', auth, async (req, res) => { try { if (!isSuperA
 
 app.post('/api/employees/bulk/import', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'import_employees')) return res.status(403).json({ error: 'No permission' }); const rows = req.body.rows || []; let added = 0, updated = 0; for (const row of rows) { const existing = await query('SELECT id FROM employees WHERE empId = ?', [row.empId]); if (existing.rows.length) { const e = rowToEmp(await query('SELECT * FROM employees WHERE empId = ?', [row.empId])); Object.assign(e, row); await query('UPDATE employees SET name = ?, email = ?, status = ?, passportNo = ?, data = ? WHERE empId = ?', [e.name, e.email, e.status || 'Active', e.passportNo, JSON.stringify(e), row.empId]); updated++; } else { const id = uid('E'); await query('INSERT INTO employees (id, empId, passportNo, name, email, status, data) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, row.empId, row.passportNo, row.name, row.email, row.status || 'Active', JSON.stringify(row)]); added++; } } await audit(req.user.name, `Bulk import: +${added}, ~${updated}`); res.json({ message: 'Imported', added, updated, total: added + updated }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
+// Profile photo — stored as a small base64 data URL on the employee record (avoids the auth-on-<img> problem).
+// An employee can set their own photo; an admin needs edit_employees.
+app.post('/api/employees/:id/photo', auth, async (req, res) => {
+  try {
+    const isSelf = req.user.role === 'employee' && req.user.employeeId === req.params.id;
+    if (!isSelf && !isSuperAdmin(req) && !hasPermission(req, 'edit_employees')) return res.status(403).json({ error: 'No permission' });
+    const photo = String(req.body.photo || '');
+    if (!/^data:image\/(png|jpe?g|webp);base64,/.test(photo)) return res.status(400).json({ error: 'Invalid image' });
+    if (photo.length > 700000) return res.status(413).json({ error: 'Image too large — please use a smaller photo' });
+    const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const e = rowToEmp(r.rows[0]); e.photo = photo;
+    await query('UPDATE employees SET data = ? WHERE id = ?', [JSON.stringify(e), e.id]);
+    await audit(req.user.name || e.name, `Photo updated for ${e.empId || e.id}`);
+    res.json({ message: 'Photo updated' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/employees/:id/photo', auth, async (req, res) => {
+  try {
+    const isSelf = req.user.role === 'employee' && req.user.employeeId === req.params.id;
+    if (!isSelf && !isSuperAdmin(req) && !hasPermission(req, 'edit_employees')) return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const e = rowToEmp(r.rows[0]); delete e.photo;
+    await query('UPDATE employees SET data = ? WHERE id = ?', [JSON.stringify(e), e.id]);
+    res.json({ message: 'Photo removed' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Granular onboarding-milestone updates. Each field maps to its own permission so an admin
+// can be allowed to update e.g. only the medical date. edit_employees / super covers all of them.
+const ONBOARDING_FIELD_PERM = {
+  medicalDate:    'update_medical_date',
+  inductionDate:  'update_induction_date',
+  biometricDate:  'update_biometric_date',
+  eidDate:        'update_eid_date',
+  dlDate:         'update_license_date',
+  deploymentDate: 'update_deployment_date',
+};
+app.patch('/api/employees/:id/onboarding', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'employee') return res.status(403).json({ error: 'No permission' });
+    const r = await query('SELECT * FROM employees WHERE id = ?', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    const e = rowToEmp(r.rows[0]);
+    const applied = [], denied = [];
+    for (const [field, perm] of Object.entries(ONBOARDING_FIELD_PERM)) {
+      if (!(field in req.body)) continue;
+      if (isSuperAdmin(req) || hasPermission(req, 'edit_employees') || hasPermission(req, perm)) {
+        e[field] = req.body[field]; applied.push(field);
+      } else denied.push(field);
+    }
+    if (!applied.length) return res.status(403).json({ error: 'You do not have permission to update ' + (denied.join(', ') || 'these fields') });
+    await query('UPDATE employees SET data = ? WHERE id = ?', [JSON.stringify(e), e.id]);
+    await audit(req.user.name, `Onboarding update for ${e.empId || e.id}: ${applied.join(', ')}`);
+    res.json({ message: 'Updated', applied, denied });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/leaves', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM leaves WHERE employeeId = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToLeave)); } const r = await query('SELECT * FROM leaves ORDER BY id DESC', []); res.json(r.rows.map(rowToLeave)); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.post('/api/leaves', auth, async (req, res) => { try { const empId = req.user.role === 'employee' ? req.user.employeeId : req.body.employeeId; const r = await query('SELECT * FROM employees WHERE id = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); if (req.body.fromDate && req.body.toDate && String(req.body.toDate) < String(req.body.fromDate)) return res.status(400).json({ error: 'The leave end date must be on or after the start date.' }); const id = uid('L'); const lv = { type: req.body.type, fromDate: req.body.fromDate, toDate: req.body.toDate, days: +req.body.days || 1, reason: req.body.reason || '', empName: e.name, empId: e.empId, appliedOn: today(), certificate: !!(req.body.certDocId || req.body.certificate), certDocId: req.body.certDocId || '', certificateName: req.body.certificateName || '' }; await query('INSERT INTO leaves (id, employeeId, status, data) VALUES (?, ?, ?, ?)', [id, e.id, 'Pending', JSON.stringify(lv)]); await notify(e.id, 'pending', 'Leave request submitted', `Your ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)) has been submitted and is awaiting approval. You will be notified once it is reviewed.`); await notifyAdmins(`New leave request \u2014 ${e.name}`, `${e.name} (${e.empId}) has requested ${lv.type} from ${lv.fromDate} to ${lv.toDate} (${lv.days} day(s)).\nReason: ${lv.reason || '\u2014'}\n\nReview it in the HRMS under Leave Requests.`, 'approve_leaves'); res.json({ id }); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -219,6 +278,7 @@ app.get('/api/documents/:id/download', auth, async (req, res) => { try { const r
 app.patch('/api/documents/:id/review', auth, async (req, res) => {
   try {
     if (req.user.role === 'employee') return res.status(403).json({ error: 'No permission' });
+    if (!isSuperAdmin(req) && !hasPermission(req, 'upload_documents') && !hasPermission(req, 'review_documents')) return res.status(403).json({ error: 'No permission' });
     const status = req.body.reviewStatus;
     if (!['Pending', 'Approved', 'Rejected', 'Reviewed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const r = await query('SELECT id FROM documents WHERE id = ?', [req.params.id]);
@@ -248,7 +308,7 @@ app.get('/api/audit', auth, async (req, res) => { try { if (!isSuperAdmin(req)) 
 
 app.get('/api/config', auth, async (req, res) => { try { const r = await query('SELECT v FROM config WHERE k = ?', ['cfg']); res.json(r.rows.length ? J(r.rows[0].v, {}) : {}); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req)) return res.status(403).json({ error: 'Super admin only' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.put('/api/config', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'manage_settings')) return res.status(403).json({ error: 'No permission' }); await query('DELETE FROM config WHERE k = ?', ['cfg']); await query('INSERT INTO config (k, v) VALUES (?, ?)', ['cfg', JSON.stringify(req.body)]); res.json({ message: 'Saved' }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 /* ─── Reports (Excel exports) ─────────────────────────────── */
 function sendXlsx(res, name, sheets) {
