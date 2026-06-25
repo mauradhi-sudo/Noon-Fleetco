@@ -71,7 +71,10 @@ CREATE TABLE IF NOT EXISTS documents (
   filename TEXT,
   driveLink TEXT,
   uploadedAt TEXT,
-  uploader TEXT
+  uploader TEXT,
+  reviewStatus TEXT DEFAULT 'Pending',
+  reviewedBy TEXT,
+  reviewedAt TEXT
 );
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
@@ -156,6 +159,13 @@ async function init() {
   // migration: fix the OTP expiry column on databases created before this fix
   if (engine === 'postgres') {
     try { await query('ALTER TABLE otps ALTER COLUMN expires TYPE BIGINT'); } catch (e) {}
+    try { await query("ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewStatus TEXT DEFAULT 'Pending'"); } catch (e) {}
+    try { await query('ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewedBy TEXT'); } catch (e) {}
+    try { await query('ALTER TABLE documents ADD COLUMN IF NOT EXISTS reviewedAt TEXT'); } catch (e) {}
+  } else {
+    try { await query("ALTER TABLE documents ADD COLUMN reviewStatus TEXT DEFAULT 'Pending'"); } catch (e) {}
+    try { await query('ALTER TABLE documents ADD COLUMN reviewedBy TEXT'); } catch (e) {}
+    try { await query('ALTER TABLE documents ADD COLUMN reviewedAt TEXT'); } catch (e) {}
   }
 }  
 

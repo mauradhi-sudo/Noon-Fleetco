@@ -383,6 +383,7 @@ let S = {
   assetTypeDraft:'bike',
   assignAssetDraft: null,   // { assetId, employeeId, assignedDate }
   accExitDraft:  null,      // { id, checkIn, checkOut }
+  docFilter:     'all',     // all | pending | approved | rejected
   loading:       false
 };
  
@@ -791,8 +792,9 @@ function renderDashONB() {
   const es = S.employees || [];
   const n = es.length;
   const have = f => es.filter(e => e[f]).length;
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
     ${_dCard('ti-users', '#185FA5', '#E6F1FB', 'Total employees', n.toLocaleString(), 'all records', "viewDashMetric('total_emp')")}
+    ${_progCard('ti-calendar-event', 'var(--green)', 'var(--green-light)', 'Joining date set', have('joiningDate'), n, "viewDashMetric('onb_joining')")}
     ${_progCard('ti-school', '#7A5AF8', '#EEEAFB', 'Induction completed', have('inductionDate'), n, "viewDashMetric('onb_induction')")}
     ${_progCard('ti-stethoscope', 'var(--green)', 'var(--green-light)', 'Medical done', have('medicalDate'), n, "viewDashMetric('onb_medical')")}
     ${_progCard('ti-fingerprint', '#185FA5', '#E6F1FB', 'Biometric done', have('biometricDate'), n, "viewDashMetric('onb_biometric')")}
@@ -1007,6 +1009,7 @@ function renderDashMetricModal() {
   else if (m.key === 'visa_expiring'){ title = 'Visas expiring ≤90 days'; headHTML = empHead + '<th>Visa expiry</th><th>Days left</th>'; rowsHTML = visaExp.map(e => { const n = dleft(e.evisaExpiry); return `<tr ${rowClick(e)}>${empCells(e)}<td style="color:${n<=30?'var(--red)':'var(--text)'};font-weight:${n<=30?'700':'400'}">${fmtDate(e.evisaExpiry)}</td><td>${n} days</td></tr>`; }).join(''); }
   else if (m.key === 'pending_leaves'){ title = 'Pending leave requests'; headHTML = '<th>Emp ID</th><th>Name</th><th>Type</th><th>From → To</th><th>Days</th><th>Applied</th>'; rowsHTML = pending.map(l => `<tr><td><b>${l.empId || '—'}</b></td><td>${l.empName || '—'}</td><td>${l.type || '—'}</td><td>${fmtDate(l.fromDate)} → ${fmtDate(l.toDate)}</td><td>${l.days || '—'}</td><td>${fmtDate(l.appliedOn)}</td></tr>`).join(''); }
   else if (m.key === 'payroll')     { title = 'Monthly payroll'; note = `<p style="font-size:15px"><b>Total net pay:</b> <span style="color:var(--green);font-weight:700">${aed(payTot)}</span> across ${(S.payslips||[]).length} payslip(s).</p>`; }
+  else if (m.key === 'onb_joining')   { title = 'Joining date status'; const r = dateCol('joiningDate', 'Joining date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_induction'){ title = 'Induction status'; const r = dateCol('inductionDate', 'Induction date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_medical')  { title = 'Medical status'; const r = dateCol('medicalDate', 'Medical date'); headHTML = r.head; rowsHTML = r.rows; }
   else if (m.key === 'onb_biometric'){ title = 'Biometric status'; const r = dateCol('biometricDate', 'Biometric date'); headHTML = r.head; rowsHTML = r.rows; }
@@ -1515,29 +1518,77 @@ async function bulkDocUpload(files) {
   R();
 }
  
+function docFileIcon(type) {
+  if (!type) return 'ti-file-description';
+  const t = String(type).toLowerCase();
+  if (t.includes('pdf')) return 'ti-file-type-pdf';
+  if (t.includes('image') || t.includes('jpg') || t.includes('jpeg') || t.includes('png')) return 'ti-photo';
+  if (t.includes('word') || t.includes('docx')) return 'ti-file-type-doc';
+  if (t.includes('excel') || t.includes('xlsx') || t.includes('csv')) return 'ti-file-type-xls';
+  return 'ti-file-description';
+}
+function docReviewBadge(status) {
+  if (status === 'Approved') return `<span class="badge bg" style="font-size:10px"><i class="ti ti-circle-check" style="font-size:10px"></i> Approved</span>`;
+  if (status === 'Rejected') return `<span class="badge br" style="font-size:10px"><i class="ti ti-circle-x" style="font-size:10px"></i> Rejected</span>`;
+  if (status === 'Reviewed') return `<span class="badge bb" style="font-size:10px"><i class="ti ti-eye-check" style="font-size:10px"></i> Reviewed</span>`;
+  return `<span class="badge ba" style="font-size:10px"><i class="ti ti-clock" style="font-size:10px"></i> Pending</span>`;
+}
+
 function renderDocsPage() {
-  const docs = S.documents || [];
+  const allDocs = S.documents || [];
   const canUp = S.user?.isSuperAdmin || (S.user?.permissions || []).includes('upload_documents');
+  const f = S.docFilter || 'all';
+  const docs = f === 'all' ? allDocs
+    : f === 'pending'  ? allDocs.filter(d => !d.reviewStatus || d.reviewStatus === 'Pending')
+    : f === 'approved' ? allDocs.filter(d => d.reviewStatus === 'Approved')
+    : f === 'rejected' ? allDocs.filter(d => d.reviewStatus === 'Rejected')
+    : allDocs;
+  const pendingCount = allDocs.filter(d => !d.reviewStatus || d.reviewStatus === 'Pending').length;
+  const fTab = (k, lbl, cnt) => `<button onclick="S.docFilter='${k}';R()"
+    style="padding:6px 14px;border-radius:7px;border:1px solid ${f===k?'var(--green)':'var(--border)'};background:${f===k?'var(--green)':'transparent'};color:${f===k?'#fff':'var(--text)'};font-size:12px;font-weight:500;cursor:pointer">
+    ${lbl}${cnt != null ? ` <span style="background:${f===k?'rgba(255,255,255,0.3)':'var(--border)'};border-radius:20px;padding:1px 6px;font-size:10px">${cnt}</span>` : ''}
+  </button>`;
   return `<div class="card">
     <div class="card-head">
       <h3>Documents</h3>
       <div style="display:flex;gap:7px">${canUp ? `
-        <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-folder-up"></i> Bulk upload (by folder)</button>
+        <button class="btn b" onclick="document.getElementById('bulkdocs').click()"><i class="ti ti-folder-up"></i> Bulk upload</button>
         <input type="file" id="bulkdocs" webkitdirectory multiple style="display:none" onchange="bulkDocUpload(this.files)">
         <button class="btn g" onclick="openModal('uploadDoc')"><i class="ti ti-upload"></i> Upload</button>` : ''}
       </div>
     </div>
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
+      ${fTab('all','All',allDocs.length)}
+      ${fTab('pending','Needs Review', pendingCount)}
+      ${fTab('approved','Approved',allDocs.filter(d=>d.reviewStatus==='Approved').length)}
+      ${fTab('rejected','Rejected',allDocs.filter(d=>d.reviewStatus==='Rejected').length)}
+    </div>
     <div class="card-body">${docs.length === 0
-      ? `<p style="text-align:center;padding:2rem;color:var(--muted)">No documents yet.</p>`
+      ? `<p style="text-align:center;padding:2rem;color:var(--muted)">No documents${f!=='all'?' in this category':''}.</p>`
       : docs.map(d => `<div class="doc-item">
-          <div style="width:34px;height:34px;border-radius:7px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:14px;color:#185FA5;flex-shrink:0">
-            <i class="ti ti-file-description"></i>
+          <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
+            <i class="ti ${docFileIcon(d.type)}"></i>
           </div>
-          <div style="flex:1;margin-left:9px">
-            <b style="font-size:13px;display:block">${d.name}</b>
-            <span style="font-size:11px;color:var(--muted)">${d.empName||''} · ${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)}</span>
+          <div style="flex:1;min-width:0;margin-left:10px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <b style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.name}</b>
+              ${docReviewBadge(d.reviewStatus)}
+            </div>
+            <span style="font-size:11px;color:var(--muted)">${d.empName ? `<b>${d.empName}</b> · ` : ''}${d.type||'—'} · ${fmtDate(d.uploadedAt)}${d.reviewedBy ? ` · reviewed by ${d.reviewedBy}` : ''}</span>
           </div>
-          <button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>
+          <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
+            ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
+            ${canUp ? `<div style="position:relative;display:inline-block">
+              <select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
+                <option value="">Review…</option>
+                <option value="Approved">✓ Approve</option>
+                <option value="Reviewed">👁 Mark Reviewed</option>
+                <option value="Rejected">✗ Reject</option>
+                <option value="Pending">↺ Reset</option>
+              </select>
+            </div>
+            <button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
+          </div>
         </div>`).join('')}
     </div>
   </div>`;
@@ -1718,16 +1769,26 @@ function renderDocumentsTab(docs, empId, isAdmin) {
     <div class="card-body">${docs.length === 0
       ? `<div class="upload-zone" onclick="openModal('uploadDocEmp')"><i class="ti ti-cloud-upload" style="font-size:24px;color:var(--muted)"></i><div style="margin-top:6px;font-size:13px;font-weight:600">Upload documents</div></div>`
       : docs.map(d => `<div class="doc-item">
-          <div style="width:32px;height:32px;border-radius:6px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:14px;color:#185FA5;flex-shrink:0">
-            <i class="ti ti-file-description"></i>
+          <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
+            <i class="ti ${docFileIcon(d.type)}"></i>
           </div>
-          <div style="flex:1;margin-left:9px">
-            <b style="display:block;font-size:13px">${d.name}</b>
-            <span style="font-size:11px;color:var(--muted)">${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)} · ${d.uploader}</span>
+          <div style="flex:1;min-width:0;margin-left:10px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+              <b style="font-size:13px">${d.name}</b>
+              ${docReviewBadge(d.reviewStatus)}
+            </div>
+            <span style="font-size:11px;color:var(--muted)">${d.type||'—'} · ${fmtDate(d.uploadedAt)}${d.uploader ? ` · ${d.uploader}` : ''}${d.reviewedBy ? ` · reviewed by ${d.reviewedBy}` : ''}</span>
           </div>
-          <div style="display:flex;gap:4px">
+          <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
             ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
-            ${isAdmin ? `<button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
+            ${isAdmin ? `<select onchange="reviewDoc('${d.id}',this.value);this.value=''" style="padding:4px 7px;border:1px solid var(--border);border-radius:7px;font-size:11px;background:transparent;cursor:pointer;color:var(--text)">
+              <option value="">Review…</option>
+              <option value="Approved">✓ Approve</option>
+              <option value="Reviewed">👁 Mark Reviewed</option>
+              <option value="Rejected">✗ Reject</option>
+              <option value="Pending">↺ Reset</option>
+            </select>
+            <button class="btn sm" style="color:var(--red)" onclick="deleteDoc('${d.id}')"><i class="ti ti-trash"></i></button>` : ''}
           </div>
         </div>`).join('')}
     </div>
@@ -2022,14 +2083,21 @@ function renderEmpDocsTab(docs) {
       <button class="btn g" onclick="openModal('uploadDocSelf')"><i class="ti ti-upload"></i> Upload</button>
     </div>
     <div class="card-body">${docs.length === 0
-      ? `<div class="upload-zone" onclick="openModal('uploadDocSelf')"><i class="ti ti-cloud-upload" style="font-size:24px;color:var(--muted)"></i><div style="margin-top:6px;font-size:13px;font-weight:600">Upload your documents</div></div>`
+      ? `<div class="upload-zone" onclick="openModal('uploadDocSelf')">
+          <i class="ti ti-cloud-upload" style="font-size:28px;color:var(--muted)"></i>
+          <div style="margin-top:8px;font-size:13px;font-weight:600">Upload your documents</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Passport, visa, EID, contracts and more</div>
+        </div>`
       : docs.map(d => `<div class="doc-item">
-          <div style="width:32px;height:32px;border-radius:6px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:14px;color:#185FA5;flex-shrink:0">
-            <i class="ti ti-file-description"></i>
+          <div style="width:36px;height:36px;border-radius:8px;background:#E6F1FB;display:flex;align-items:center;justify-content:center;font-size:16px;color:#185FA5;flex-shrink:0">
+            <i class="ti ${docFileIcon(d.type)}"></i>
           </div>
-          <div style="flex:1;margin-left:9px">
-            <b style="display:block;font-size:13px">${d.name}</b>
-            <span style="font-size:11px;color:var(--muted)">${d.type} · ${d.size} · ${fmtDate(d.uploadedAt)}</span>
+          <div style="flex:1;min-width:0;margin-left:10px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+              <b style="font-size:13px">${d.name}</b>
+              ${docReviewBadge(d.reviewStatus)}
+            </div>
+            <span style="font-size:11px;color:var(--muted)">${d.type||'—'} · ${fmtDate(d.uploadedAt)}</span>
           </div>
           ${d.filename ? `<button class="btn sm" onclick="viewDoc('${d.id}')" title="View / download"><i class="ti ti-eye"></i></button>` : ''}
         </div>`).join('')}
@@ -2458,6 +2526,15 @@ async function deleteDoc(id) {
   await api('DELETE', `/documents/${id}`);
   S.documents = await api('GET', '/documents');
   R();
+}
+
+async function reviewDoc(id, status) {
+  if (!status) return;
+  try {
+    await api('PATCH', `/documents/${id}/review`, { reviewStatus: status });
+    S.documents = await api('GET', '/documents');
+    R();
+  } catch (e) { alert('Error: ' + e.message); }
 }
  
 function confirmDeleteEmployee(id, name) {
