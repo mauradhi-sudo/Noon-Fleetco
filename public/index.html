@@ -6,6 +6,9 @@
 <title>Noon Fleet HRMS</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjEwMCIgZmlsbD0iIzNFMThBOCIvPgogIDx0ZXh0IHg9IjEwMCIgeT0iOTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXNpemU9IjQ2IiBsZXR0ZXItc3BhY2luZz0iLTIiIGZpbGw9IiNGRkUxMDAiPm5vb248L3RleHQ+CiAgPHRleHQgeD0iMTAwIiB5PSIxNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXN0eWxlPSJpdGFsaWMiIGZvbnQtc2l6ZT0iNTAiIGxldHRlci1zcGFjaW5nPSIxIiBmaWxsPSIjRkZGRkZGIj5GTEVFVDwvdGV4dD4KPC9zdmc+Cg=="/>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.40.0/tabler-icons.min.css" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -17,60 +20,73 @@
 *{box-sizing:border-box;margin:0;padding:0}
  
 :root{
-  /* Brand colours */
-  --green:       #1D9E75;
-  --green-dark:  #0F6E56;
-  --green-light: #E1F5EE;
+  /* Brand — Noon Fleet purple + yellow.
+     NOTE: the --green* names are kept so the whole app re-themes
+     from these three values; they now hold the brand purple. */
+  --green:       #3E18A8;   /* brand purple (primary)   */
+  --green-dark:  #2A1178;   /* deep purple (hover/press) */
+  --green-light: #ECE8FA;   /* pale purple tint (fills)  */
+  --brand:       #3E18A8;
+  --brand-2:     #5B34D6;
+  --yellow:      #FFDD00;   /* noon yellow accent        */
+  --yellow-deep: #F2C200;
+  --ink:         #17123A;   /* dark sidebar base         */
+  --ink-2:       #221a52;
   --red:         #E24B4A;
   --amber:       #EF9F27;
   --blue:        #378ADD;
   /* Surfaces */
-  --bg:      #f6f7f6;
+  --bg:      #f3f3f8;
   --surface: #fff;
-  --border:  rgba(15,30,25,0.09);
-  --border-strong: rgba(15,30,25,0.14);
-  --hover:   #f7f9f8;
+  --border:  rgba(30,20,80,0.09);
+  --border-strong: rgba(30,20,80,0.15);
+  --hover:   #f7f6fc;
   /* Text */
-  --text:  #16201c;
-  --muted: #687872;
-  --faint: #9aa6a1;
+  --text:  #1a1533;
+  --muted: #6a6580;
+  --faint: #9c98ae;
   /* Depth + shape */
-  --shadow-sm: 0 1px 2px rgba(16,40,30,.05);
-  --shadow:    0 2px 10px rgba(16,40,30,.06), 0 1px 2px rgba(16,40,30,.05);
-  --shadow-lg: 0 12px 36px rgba(16,40,30,.12);
-  --r-sm: 8px; --r: 12px; --r-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(30,20,80,.06);
+  --shadow:    0 2px 12px rgba(30,20,80,.07), 0 1px 2px rgba(30,20,80,.05);
+  --shadow-lg: 0 18px 44px -12px rgba(30,20,80,.20);
+  --r-sm: 9px; --r: 13px; --r-lg: 18px;
 }
  
 body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background:var(--bg);
   color:var(--text);
   font-size:14px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
 }
  
 /* ─── Auth Screen ─────────────────────────────────────────── */
-.auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
-.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
-.brand-row{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
-.brand-icon{width:44px;height:44px;background:var(--green);border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
-.brand-title{font-size:18px;font-weight:600}
+.auth-screen{position:relative;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;overflow:hidden;background:radial-gradient(circle at 18% 22%, #4a1fb8 0%, transparent 55%), radial-gradient(circle at 88% 78%, #5b34d6 0%, transparent 52%), linear-gradient(155deg,#2a1178 0%,#17123a 100%)}
+.auth-screen::before{content:'';position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(255,221,0,.16),transparent 70%);bottom:-190px;left:-140px;pointer-events:none}
+.auth-screen::after{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:24px 24px;opacity:.6;pointer-events:none}
+.auth-box{position:relative;z-index:1;background:var(--surface);border:1px solid rgba(255,255,255,.5);border-radius:22px;padding:2.6rem 2.4rem;width:100%;max-width:412px;box-shadow:0 34px 80px -22px rgba(8,4,34,.65),0 4px 14px rgba(8,4,34,.24)}
+.brand-row{display:flex;align-items:center;gap:12px;margin-bottom:1.8rem}
+.brand-icon{width:44px;height:44px;background:var(--green);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
+.brand-title{font-size:19px;font-weight:700;letter-spacing:-.01em}
 .brand-sub{font-size:12px;color:var(--muted)}
-.role-switch{display:flex;gap:4px;background:#f0f0ee;border-radius:9px;padding:4px;margin-bottom:1.5rem}
-.role-btn{flex:1;padding:7px;border:none;background:transparent;border-radius:7px;cursor:pointer;font-size:13px;color:var(--muted)}
-.role-btn.active{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 4px rgba(0,0,0,0.1)}
-.auth-hint{font-size:11px;color:var(--faint);margin-top:10px;line-height:1.7;text-align:center}
-.error-msg{background:#FCEBEB;color:#A32D2D;border-radius:7px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+.role-switch{display:flex;gap:4px;background:#f0eef8;border-radius:11px;padding:4px;margin-bottom:1.5rem}
+.role-btn{flex:1;padding:8px;border:none;background:transparent;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .12s,color .12s}
+.role-btn.active{background:var(--surface);color:var(--green);box-shadow:0 2px 6px rgba(30,20,80,.12)}
+.auth-hint{font-size:11.5px;color:var(--faint);margin-top:12px;line-height:1.7;text-align:center}
+.error-msg{background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px}
  
 /* ─── Form Fields ─────────────────────────────────────────── */
 .field{margin-bottom:1rem}
 .field label{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px}
-.field input,.field select,.field textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.15s}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green)}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:9px;font-size:14px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(62,24,168,.13)}
 .field textarea{resize:vertical;min-height:80px}
  
 /* ─── Buttons ─────────────────────────────────────────────── */
-.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer}
+.btn-primary{width:100%;padding:12px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 18px -8px rgba(62,24,168,.6);transition:background .13s,transform .1s}
 .btn-primary:hover{background:var(--green-dark)}
+.btn-primary:active{transform:translateY(1px)}
 .btn{padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text);display:inline-flex;align-items:center;gap:5px}
 .btn:hover{background:#f5f5f3}
 .btn.g{background:var(--green);color:#fff;border:none}
@@ -86,60 +102,64 @@ body{
 .app-layout{display:flex;min-height:100vh}
  
 /* Sidebar */
-.sidebar{width:235px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-.sidebar-brand{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)}
+.sidebar{width:240px;background:linear-gradient(185deg,var(--ink-2),var(--ink));display:flex;flex-direction:column;flex-shrink:0;padding-top:4px}
+.sidebar-brand{padding:1.35rem 1.4rem 1.2rem;border-bottom:1px solid rgba(255,255,255,.09)}
+.sidebar-brand .logo-chip{display:inline-flex;background:#fff;border-radius:12px;padding:7px 12px;box-shadow:0 6px 16px rgba(0,0,0,.28)}
 .sidebar-brand h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
-.sidebar-brand .dot{width:8px;height:8px;background:var(--green);border-radius:50%}
-.sidebar-brand small{font-size:11px;color:var(--muted);display:block;margin-top:2px}
-.nav-link{display:flex;align-items:center;gap:10px;padding:9px 1.5rem;cursor:pointer;font-size:13px;color:var(--muted);border-left:2px solid transparent;position:relative;user-select:none}
-.nav-link:hover{background:#f9f9f7;color:var(--text)}
-.nav-link.active{background:var(--green-light);color:var(--green);border-left-color:var(--green);font-weight:500}
-.nav-link i{font-size:16px;flex-shrink:0}
-.nav-badge{position:absolute;right:12px;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:600}
-.sidebar-footer{margin-top:auto;padding:1rem 1.5rem;border-top:1px solid var(--border)}
-.user-chip{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.sidebar-brand .dot{width:8px;height:8px;background:var(--yellow);border-radius:50%}
+.sidebar-brand small{font-size:11px;color:rgba(255,255,255,.5);display:block;margin-top:11px;letter-spacing:.02em}
+.nav-link{display:flex;align-items:center;gap:11px;padding:10px 1.4rem;cursor:pointer;font-size:13px;color:rgba(255,255,255,.66);border-left:2.5px solid transparent;position:relative;user-select:none;font-weight:500;transition:background .12s,color .12s}
+.nav-link:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-link:hover i{color:#fff}
+.nav-link.active{background:rgba(255,255,255,.09);color:#fff;border-left-color:var(--yellow);font-weight:700}
+.nav-link.active i{color:var(--yellow)}
+.nav-link i{font-size:17px;flex-shrink:0;color:rgba(255,255,255,.5);transition:color .12s}
+.nav-badge{position:absolute;right:12px;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:700}
+.sidebar-footer{margin-top:auto;padding:1rem 1.4rem;border-top:1px solid rgba(255,255,255,.09)}
+.user-chip{display:flex;align-items:center;gap:9px;margin-bottom:10px}
 .user-chip-text{font-size:12px}
-.user-chip-text b{display:block;font-weight:600}
-.user-chip-text span{color:var(--muted)}
-.logout-btn{width:100%;padding:7px;background:transparent;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;color:var(--muted)}
-.logout-btn:hover{background:#f5f5f3}
+.user-chip-text b{display:block;font-weight:600;color:#fff}
+.user-chip-text span{color:rgba(255,255,255,.5)}
+.logout-btn{width:100%;padding:8px;background:transparent;border:1px solid rgba(255,255,255,.18);border-radius:9px;cursor:pointer;font-size:12px;color:rgba(255,255,255,.72);font-weight:500;transition:background .12s,color .12s}
+.logout-btn:hover{background:rgba(255,255,255,.09);color:#fff}
  
 /* Main area */
 .main-area{flex:1;display:flex;flex-direction:column;overflow:auto;min-width:0}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.topbar h2{font-size:16px;font-weight:600}
+.topbar{background:rgba(255,255,255,.85);backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--border);padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50}
+.topbar h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
 .topbar-actions{display:flex;align-items:center;gap:8px}
 .page{padding:1.5rem}
  
 /* ─── Avatar ──────────────────────────────────────────────── */
-.avatar{width:32px;height:32px;border-radius:50%;background:#9FE1CB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#085041;flex-shrink:0;background-size:cover;background-position:center}
-.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#B8ECDA,#9FE1CB);box-shadow:inset 0 0 0 1px rgba(8,80,65,.08);background-size:cover;background-position:center}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#C9B8F5,#A98DED);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#2A1178;flex-shrink:0;background-size:cover;background-position:center}
+.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#D4C6F8,#A98DED);box-shadow:inset 0 0 0 1px rgba(42,17,120,.1);background-size:cover;background-position:center;color:#2A1178}
 .avatar.has-photo{color:transparent}
 .avatar-wrap{position:relative;flex-shrink:0}
 .avatar-wrap .photo-edit{position:absolute;right:-3px;bottom:-3px;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;border:2.5px solid var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;box-shadow:var(--shadow-sm);transition:background .12s}
 .avatar-wrap .photo-edit:hover{background:var(--green-dark)}
  
 /* ─── Cards ───────────────────────────────────────────────── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow-sm)}
-.card-head{padding:1rem 1.35rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-head h3{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow)}
+.card-head{padding:1.05rem 1.35rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h3{font-size:14px;font-weight:700;letter-spacing:-.01em}
 .card-body{padding:1.35rem}
  
 /* ─── Stats Row ───────────────────────────────────────────── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem}
-.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
-.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(20,40,80,.10);border-color:var(--green)}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:1.25rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.05rem;box-shadow:var(--shadow-sm);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+.stat.clickable{cursor:pointer}
+.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 12px 26px -10px rgba(62,24,168,.28);border-color:rgba(62,24,168,.35)}
 .stat.clickable:active{transform:translateY(-1px)}
-.stat .lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
-.stat .val{font-size:22px;font-weight:700}
+.stat .lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;letter-spacing:.01em}
+.stat .val{font-size:22px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
  
 /* ─── Table ───────────────────────────────────────────────── */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
-th{font-size:11px;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;background:#fafaf8;white-space:nowrap}
-td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th{font-size:10.5px;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;background:#f6f5fb;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
+td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#fafaf8}
+tr:hover td{background:var(--hover)}
  
 /* ─── Badges ──────────────────────────────────────────────── */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
@@ -160,7 +180,7 @@ tr:hover td{background:#fafaf8}
 .modal-foot{padding:.9rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-grid .full{grid-column:1/-1}
-.section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:1.4rem 0 .7rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-label{font-size:11px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:0.06em;margin:1.5rem 0 .8rem;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .sec-head{display:flex;align-items:center;gap:9px;margin:1.5rem 0 .85rem}
 .sec-head .sec-ico{width:30px;height:30px;border-radius:9px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .sec-head h4{font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--text)}
@@ -176,7 +196,7 @@ tr:hover td{background:#fafaf8}
 .leave-hero .lh-divider{width:1px;align-self:stretch;background:var(--border)}
 .leave-hero .lh-stat{font-size:12px;color:var(--muted)}
 .leave-hero .lh-stat b{display:block;font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px}
-.ltcard{background:#fafaf8;border:1px solid var(--border);border-radius:9px;padding:.875rem;margin-bottom:8px}
+.ltcard{background:var(--hover);border:1px solid var(--border);border-radius:11px;padding:.875rem;margin-bottom:8px}
 .ltcard h4{font-size:12px;font-weight:600;margin-bottom:6px}
 .lt-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
  
@@ -194,10 +214,10 @@ tr:hover td{background:#fafaf8}
 .info-cell{background:var(--surface);padding:1rem 1.1rem}
 .info-cell .lbl{font-size:10.5px;color:var(--faint);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
 .info-cell .val{font-size:13.5px;font-weight:500;word-break:break-word;color:var(--text);line-height:1.4}
-.tabs-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:1.35rem;overflow-x:auto}
-.tab-btn{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color .12s,border-color .12s}
-.tab-btn:hover{color:var(--text)}
-.tab-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
+.tabs-bar{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:1.35rem;overflow-x:auto;box-shadow:var(--shadow-sm)}
+.tab-btn{padding:9px 15px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;border-radius:9px;white-space:nowrap;transition:color .12s,background .12s}
+.tab-btn:hover{color:var(--text);background:var(--hover)}
+.tab-btn.active{color:#fff;background:var(--green);font-weight:700;box-shadow:0 5px 12px -4px rgba(62,24,168,.5)}
  
 /* ─── Payslip PDF ─────────────────────────────────────────── */
 .ps-pdf{background:#fff;color:#000;font-family:Arial,sans-serif;max-width:720px;border:1px solid #ccc;margin:0 auto;border-radius:4px;overflow:hidden}
@@ -211,7 +231,7 @@ tr:hover td{background:#fafaf8}
 .ps-col-title{background:#f0f0f0;font-size:12px;font-weight:700;padding:7px 12px;border-bottom:1px solid #ddd}
 .ps-col-right{border-left:1px solid #222}
 .ps-line{display:flex;justify-content:space-between;padding:5px 12px;font-size:11px;border-bottom:0.5px solid #f0f0f0}
-.ps-line.total{font-weight:700;font-size:12px;color:var(--green);background:#f9fff9}
+.ps-line.total{font-weight:700;font-size:12px;color:var(--green);background:#faf9fe}
 .ps-summary{padding:10px 12px;font-size:11px}
 .ps-sum-line{display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid #eee}
 .ps-sum-line.final{font-weight:700;color:var(--green);font-size:13px}
@@ -229,7 +249,7 @@ tr:hover td{background:#fafaf8}
 .imp-step-num{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;color:var(--muted)}
 .imp-step.active .imp-step-num,.imp-step.done .imp-step-num{background:var(--green);border-color:var(--green);color:#fff}
 .imp-step-lbl{font-size:11px;font-weight:500;color:var(--muted);line-height:1.3}
-.imp-step.active .imp-step-lbl{color:#085041}
+.imp-step.active .imp-step-lbl{color:var(--green-dark)}
 .import-tab-bar{display:flex;gap:5px;background:#f0f0ee;border-radius:9px;padding:4px;margin-bottom:1.1rem}
 .import-tab{flex:1;padding:8px;border:none;background:transparent;border-radius:7px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px}
 .import-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.1)}
@@ -429,6 +449,10 @@ let S = {
   assignAssetDraft: null,   // { assetId, employeeId, assignedDate }
   accExitDraft:  null,      // { id, checkIn, checkOut }
   docFilter:     'all',     // all | pending | approved | rejected
+  attendance:    null,      // employee's own attendance records
+  attSummary:    null,      // dashboard attendance summary
+  attRows:       null,      // parsed attendance rows awaiting upload
+  attStep:       1,         // upload wizard step
   loading:       false
 };
  
@@ -513,6 +537,7 @@ async function loadData(force) {
       if (!S.documents     || force) S.documents     = await api('GET', '/documents');
       if (!S.assetSummary  || force) { try { S.assetSummary = await api('GET', '/assets/summary'); } catch (e) {} }
       if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) {} }
+      if (!S.attSummary    || force) { try { S.attSummary = await api('GET', '/attendance/summary'); } catch (e) {} }
     } else if (S.screen === 'employee') {
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
@@ -520,6 +545,7 @@ async function loadData(force) {
       if (!S.notifications || force) S.notifications = await api('GET', '/notifications');
       if (!S.allocations   || force) S.allocations   = await api('GET', '/accommodation/allocations');
       if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) { S.assets = []; } }
+      if (!S.attendance    || force) { try { S.attendance = await api('GET', '/attendance'); } catch (e) { S.attendance = []; } }
     }
   } catch (e) { console.error('loadData error:', e); }
 }
@@ -655,9 +681,9 @@ function renderLogin() {
         ${S.otpSending ? 'Sending code…' : 'Send login code <i class=\'ti ti-send\'></i>'}
       </button>
       <p class="auth-hint">A 6-digit one-time code will be emailed to you.</p>`
-    : `<div style="background:#E1F5EE;border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:#0F6E56">
+    : `<div style="background:var(--green-light);border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:var(--green-dark)">
         <i class="ti ti-mail"></i> Code sent to <b>${S.otpEmail}</b>
-        <button onclick="S.otpStep='email';S.loginErr='';R()" style="float:right;background:none;border:none;color:#0F6E56;cursor:pointer;font-size:12px">Change email</button>
+        <button onclick="S.otpStep='email';S.loginErr='';R()" style="float:right;background:none;border:none;color:var(--green-dark);cursor:pointer;font-size:12px">Change email</button>
       </div>
       <div class="field">
         <label>6-digit login code</label>
@@ -680,9 +706,9 @@ function renderLogin() {
     ${S.loginErr ? `<div class="error-msg"><i class="ti ti-alert-circle"></i> ${S.loginErr}</div>` : ''}
     <button class="btn-primary" onclick="doLogin()">Continue <i class="ti ti-arrow-right"></i></button>
     <p class="auth-hint">Step 1 of 2 — a 6-digit code will be emailed to you</p>`
-    : `<div style="background:#E1F5EE;border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:#0F6E56">
+    : `<div style="background:var(--green-light);border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:var(--green-dark)">
         <i class="ti ti-mail"></i> Code sent to <b>${S.empOtpEmail||'your email'}</b>
-        <button onclick="S.empOtpStep='creds';S.loginErr='';R()" style="float:right;background:none;border:none;color:#0F6E56;cursor:pointer;font-size:12px">Back</button>
+        <button onclick="S.empOtpStep='creds';S.loginErr='';R()" style="float:right;background:none;border:none;color:var(--green-dark);cursor:pointer;font-size:12px">Back</button>
       </div>
       <div class="field">
         <label>6-digit login code</label>
@@ -718,6 +744,7 @@ function renderAdmin() {
     ...(can('view_employees') ? [['employees', 'ti-users', 'Employees', '']] : []),
     ...(can('import_employees') || can('manage_payroll') ? [['import', 'ti-file-upload', 'Bulk Import', '']] : []),
     ...(can('view_leaves') ? [['leaves', 'ti-calendar-event', 'Leaves', pendingLeaves > 0 ? pendingLeaves : '']] : []),
+    ...(can('view_attendance') || can('upload_attendance') ? [['attendance', 'ti-calendar-check', 'Attendance', '']] : []),
     ...(can('view_payroll') ? [['payroll', 'ti-cash', 'Payroll', '']] : []),
     ...(can('view_documents') || can('upload_documents') || can('review_documents') ? [['documents', 'ti-folder', 'Documents', '']] : []),
     ...(can('view_accommodation') || can('assign_beds') || can('manage_accommodation') ? [['accommodation', 'ti-bed', 'Accommodation', '']] : []),
@@ -729,7 +756,7 @@ function renderAdmin() {
   ];
   const titles = {
     dashboard: 'Dashboard', employees: 'Employees', import: 'Bulk Import', leaves: 'Leave Requests',
-    payroll: 'Payroll', documents: 'Documents', accommodation: 'Accommodation', assets: 'Fleet Assets', reports: 'Reports', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
+    payroll: 'Payroll', documents: 'Documents', attendance: 'Attendance', accommodation: 'Accommodation', assets: 'Fleet Assets', reports: 'Reports', admins: 'Admin Users', audit: 'Audit Log', settings: 'Settings',
     empview: S.viewEmp?.name || 'Employee', psview: 'Payslip'
   };
  
@@ -742,6 +769,7 @@ function renderAdmin() {
   else if (S.nav === 'leaves')    content = renderLeaves();
   else if (S.nav === 'payroll')   content = renderPayrollPage();
   else if (S.nav === 'documents') content = renderDocsPage();
+  else if (S.nav === 'attendance') content = renderAttendancePage();
   else if (S.nav === 'accommodation') content = renderAccommodation();
   else if (S.nav === 'assets')        content = renderAssets();
   else if (S.nav === 'reports')       content = renderReports();
@@ -749,13 +777,15 @@ function renderAdmin() {
   else if (S.nav === 'empview' && S.viewEmp)     content = renderEmpDetail();
   else if (S.nav === 'psview'  && S.viewPayslip) content = renderPsPage();
  
+  content = pageHeader(S.nav) + content;
+ 
   const initials = (S.user?.name||'AD').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
  
   return `<div class="app-layout">
     ${S.sideOpen ? `<div class="sidebar-overlay show" onclick="S.sideOpen=false;R()"></div>` : ''}
     <aside class="sidebar ${S.sideOpen ? 'open' : ''}">
       <div class="sidebar-brand">
-        <img src="${LOGO}" alt="Noon Fleet" style="height:36px;width:auto;margin-bottom:6px;display:block"/>
+        <span class="logo-chip"><img src="${LOGO}" alt="Noon Fleet" style="height:30px;width:auto;display:block"/></span>
         <small>${isSuperAdmin ? 'Super Admin' : 'Admin Portal'} · HRMS</small>
       </div>
       ${navs.map(([k, ic, lbl, cnt]) => `
@@ -806,21 +836,46 @@ function renderAdmin() {
 /* ─── Dashboard ────────────────────────────────────────────── */
 function setDashView(v) { S.dashView = v; R(); }
 
+/* Shared page header (title + subtitle) for the content pages.
+   Dashboard, Attendance, profile & payslip render their own headers, so skip those. */
+const PAGE_META = {
+  employees:     { t: 'Employees',        s: 'Full workforce directory & records' },
+  leaves:        { t: 'Leave management', s: 'Requests, approvals & balances' },
+  payroll:       { t: 'Payroll',          s: 'Published monthly payslips' },
+  documents:     { t: 'Documents',        s: 'Employee files & compliance records' },
+  accommodation: { t: 'Accommodation',    s: 'Camps, rooms & allocations' },
+  assets:        { t: 'Fleet assets',     s: 'Bikes, SIMs & equipment tracking' },
+  reports:       { t: 'Reports',          s: 'Export workforce & operations data' },
+  admins:        { t: 'Admin users',      s: 'Team roles & permissions' },
+  settings:      { t: 'Settings',         s: 'Custom fields & payroll configuration' },
+  audit:         { t: 'Audit log',        s: 'System activity history' },
+  import:        { t: 'Bulk import',      s: 'Upload employees, payroll & attendance' }
+};
+function pageHeader(nav) {
+  const m = PAGE_META[nav]; if (!m) return '';
+  return `<div style="margin-bottom:1.4rem"><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">${m.t}</h1><p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">${m.s}</p></div>`;
+}
+
 /* shared dashboard building blocks */
 function _dCard(icon, color, bg, lbl, val, sub, onclick) {
-  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
-    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
-    <div style="min-width:0"><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div>${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${sub}</div>` : ''}</div>
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+    <div style="width:44px;height:44px;border-radius:12px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:22px;color:${color};margin-bottom:14px"><i class="ti ${icon}"></i></div>
+    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${val}</div>
+    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${lbl}</div>
+    ${sub ? `<div style="font-size:11.5px;color:var(--faint);margin-top:6px">${sub}</div>` : ''}
   </div>`;
 }
 function _progCard(icon, color, bg, lbl, have, total, onclick) {
   const pc = total ? Math.round(have / total * 100) : 0;
-  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
-    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
-    <div style="flex:1;min-width:0"><div class="lbl">${lbl}</div>
-      <div class="val" style="font-size:20px">${(have||0).toLocaleString()} <span style="font-size:12px;color:var(--muted);font-weight:400">/ ${(total||0).toLocaleString()} &middot; ${pc}%</span></div>
-      <div class="leave-bar" style="height:6px;margin-top:6px"><div class="leave-fill" style="width:${pc}%;background:${color}"></div></div>
-    </div></div>`;
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="width:44px;height:44px;border-radius:12px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:22px;color:${color}"><i class="ti ${icon}"></i></div>
+      <span style="font-size:12.5px;font-weight:800;color:${color};font-variant-numeric:tabular-nums">${pc}%</span>
+    </div>
+    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${(have||0).toLocaleString()} <span style="font-size:13px;color:var(--faint);font-weight:600">/ ${(total||0).toLocaleString()}</span></div>
+    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${lbl}</div>
+    <div style="height:6px;margin-top:11px;border-radius:99px;background:rgba(30,20,80,.08);overflow:hidden"><div style="height:100%;width:${pc}%;border-radius:99px;background:${color}"></div></div>
+  </div>`;
 }
 function _posBars(emps, label) {
   const byPos = {}; emps.forEach(e => { const k = e.position || 'Other'; byPos[k] = (byPos[k] || 0) + 1; });
@@ -840,10 +895,15 @@ function renderDashboard() {
   const allowed = dashTabsAllowed();
   let v = S.dashView || allowed[0];
   if (!allowed.includes(v)) v = allowed[0];
-  const tab = (k, label, icon) => allowed.includes(k) ? `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1px solid ${v === k ? 'var(--green)' : 'var(--border)'};background:${v === k ? 'var(--green)' : '#fff'};color:${v === k ? '#fff' : 'var(--text)'};font-weight:600;font-size:13px;cursor:pointer"><i class="ti ${icon}"></i> ${label}</button>` : '';
-  const switcher = allowed.length > 1 ? `<div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>` : '';
+  const titles = { hr: 'HR overview', onb: 'Onboarding overview', ops: 'Operations overview' };
+  const subs   = { hr: 'Workforce, leave & payroll snapshot', onb: 'Joining, documents & clearance progress', ops: 'Deployment pipeline & fleet assets' };
+  const tab = (k, label, icon) => allowed.includes(k) ? `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 17px;border-radius:9px;border:none;background:${v === k ? 'var(--green)' : 'transparent'};color:${v === k ? '#fff' : 'var(--muted)'};font-weight:${v === k ? '700' : '600'};font-size:13px;cursor:pointer;white-space:nowrap;${v === k ? 'box-shadow:0 5px 12px -4px rgba(62,24,168,.55)' : ''}"><i class="ti ${icon}"></i> ${label}</button>` : '';
+  const switcher = allowed.length > 1 ? `<div style="display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;box-shadow:var(--shadow-sm)">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>` : '';
+  const header = `<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:1.4rem">
+    <div><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">${titles[v] || 'Overview'}</h1>
+    <p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">${subs[v] || ''}</p></div>${switcher}</div>`;
   const body = v === 'onb' ? renderDashONB() : v === 'ops' ? renderDashOps() : renderDashHR();
-  return switcher + body;
+  return header + body;
 }
 
 function renderDashONB() {
@@ -866,6 +926,21 @@ function renderDashONB() {
   ${_posBars(es, 'all staff')}`;
 }
 
+// Shared attendance summary strip for the dashboards.
+function renderAttDashStrip() {
+  const s = S.attSummary;
+  const canSee = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('view_attendance') || (S.user?.permissions||[]).includes('upload_attendance');
+  if (!canSee) return '';
+  const lastStr = s && s.lastDate ? fmtDate(s.lastDate) : '';
+  return `<div class="section-label" style="margin:1.25rem 0 .6rem">Attendance ${lastStr?`&mdash; as of ${lastStr}`:''}</div>
+  <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(175px,1fr))">
+    ${_dCard('ti-user-check','var(--green)','var(--green-light)','Present at work', (s&&s.present!=null?s.present:0).toLocaleString(), lastStr?'':'no data', "setNav('attendance')")}
+    ${_dCard('ti-user-off','var(--red)','#FCEBEB','Absent', (s&&s.absent!=null?s.absent:0).toLocaleString(), '', "setNav('attendance')")}
+    ${_dCard('ti-calendar-event','var(--amber)','#FAEEDA','On leave', (s&&s.leave!=null?s.leave:0).toLocaleString(), '', "setNav('attendance')")}
+    ${_dCard('ti-calendar-stats','#185FA5','#E6F1FB','Attendance updated', lastStr||'—', s&&s.markedOnLast?(s.markedOnLast+' marked'):'upload to begin', "setNav('attendance')")}
+  </div>`;
+}
+
 function renderDashOps() {
   const es = S.employees || [];
   const active = es.filter(e => e.status === 'Active');
@@ -884,6 +959,7 @@ function renderDashOps() {
     ${_dCard('ti-user-check', 'var(--green)', 'var(--green-light)', 'Active', active.length.toLocaleString(), '', "viewDashMetric('ops_active')")}
     ${_dCard('ti-user-off', 'var(--red)', '#FCEBEB', 'Inactive', inact.length.toLocaleString(), '', "viewDashMetric('inactive')")}
   </div>
+  ${renderAttDashStrip()}
   <div class="section-label" style="margin:1.25rem 0 .6rem">Deployment pipeline</div>
   <div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(245px,1fr))">
     ${_dCard('ti-motorbike', 'var(--amber)', '#FAEEDA', 'Riders: EID received, no licence date', cnt(riders, e => e.eidDate && !e.dlDate).toLocaleString(), 'delivery riders', "viewDashMetric('pipe_rider_eid_nodl')")}
@@ -928,11 +1004,7 @@ function renderDashHR() {
   const posRows = Object.entries(byPos).sort((a, b) => b[1] - a[1]);
   const maxPos  = posRows.length ? posRows[0][1] : 1;
   const pcL = onLeave / (es.length || 1) * 100, pcI = inact.length / (es.length || 1) * 100;
-  const card = (icon, color, bg, lbl, val, key) => `
-    <div class="stat" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="viewDashMetric('${key}')">
-      <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
-      <div><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div></div>
-    </div>`;
+  const card = (icon, color, bg, lbl, val, key) => _dCard(icon, color, bg, lbl, val, '', `viewDashMetric('${key}')`);
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
     ${card('ti-users','#185FA5','#E6F1FB','Total employees',es.length.toLocaleString(),'total_emp')}
     ${card('ti-user-check','var(--green)','var(--green-light)','Active &amp; working',working.toLocaleString(),'active_emp')}
@@ -944,6 +1016,7 @@ function renderDashHR() {
     ${card('ti-id-badge','var(--red)','#FCEBEB','Visas expiring ≤90 days',expir.toLocaleString(),'visa_expiring')}
     ${card('ti-cash','var(--green)','var(--green-light)','Monthly payroll',aed(payTot),'payroll')}
   </div>
+  ${renderAttDashStrip()}
   <div class="card"><div class="card-head"><h3>Workforce status</h3>
     <span style="font-size:11px;color:var(--muted)"><span style="color:var(--green)">●</span> Working &nbsp;<span style="color:var(--amber)">●</span> On leave &nbsp;<span style="color:var(--red)">●</span> Inactive</span></div>
   <div class="card-body" style="padding:1rem 1.25rem">
@@ -1170,26 +1243,171 @@ async function downloadReport(path, filename) {
 // Open/download a document via the authenticated API (browser links can't carry
 // the bearer token, so fetch → blob → open in a new tab, with a download fallback).
 async function viewDoc(id) {
+  // Open the tab synchronously inside the click gesture — opening it AFTER the
+  // await gets blocked by the browser's popup blocker (that was the "can't view" bug).
+  const w = window.open('', '_blank');
+  if (w) { try { w.document.write('<p style="font-family:sans-serif;padding:20px;color:#666">Loading document…</p>'); } catch (e) {} }
   try {
     const res = await fetch(API + '/api/documents/' + id + '/download', { headers: { 'Authorization': 'Bearer ' + S.token } });
     if (!res.ok) { let m = 'Could not open this file'; try { m = (await res.json()).error || m; } catch (e) {} throw new Error(m); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const w = window.open(url, '_blank');
-    if (!w) {
+    if (w && !w.closed) {
+      w.location.href = url;
+    } else {
       const doc = (S.documents || []).find(x => x.id === id);
       const a = document.createElement('a');
       a.href = url; a.download = (doc && doc.name) || 'document';
       document.body.appendChild(a); a.click(); a.remove();
     }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (e) { alert(e.message); }
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  } catch (e) { if (w && !w.closed) w.close(); alert(e.message); }
 }
 
 function exportLeavesData() {
   downloadReport('/leaves/export', 'leaves_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
- 
+
+/* ─── Attendance ───────────────────────────────────────────── */
+const ATT_BADGE = { Present: 'bg', Absent: 'br', Leave: 'ba', Off: 'bgr' };
+function attBadge(s) { return `<span class="badge ${ATT_BADGE[s] || 'bgr'}">${s || '—'}</span>`; }
+// Parse a date-ish column header into YYYY-MM-DD; returns '' if it isn't a date.
+function parseAttDate(h) {
+  if (h == null || h === '') return '';
+  if (typeof h === 'number' && h > 20000 && h < 90000) { const d = new Date(Math.round((h - 25569) * 86400 * 1000)); return isNaN(d) ? '' : d.toISOString().slice(0, 10); }
+  const s = String(h).trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  if ((m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/))) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  const d = new Date(s); return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+// Build & download a wide-format attendance template: Employee ID, Name, then a week of date columns.
+function downloadAttTemplate() {
+  const days = [];
+  const base = new Date();
+  for (let i = 6; i >= 0; i--) { const d = new Date(base); d.setDate(base.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
+  const header = ['Employee ID', 'Employee Name', ...days];
+  const emps = (S.employees || []).filter(e => e.status !== 'Inactive');
+  const rows = emps.map(e => [e.empId || '', e.name || '', ...days.map(() => '')]);
+  if (!rows.length) rows.push(['SN1366', 'Sample Employee', ...days.map((_, i) => i === 6 ? 'P' : '')]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), 'Attendance');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Noon Fleet HRMS — Attendance upload'],
+    [''],
+    ['1. Each row is one employee. Keep the "Employee ID" column — it must match the HRMS ID.'],
+    ['2. Each date column (YYYY-MM-DD) is one day. Add as many day columns as you need.'],
+    ['3. Mark each cell:  P = Present   A = Absent   L = Leave   O = Week off / holiday'],
+    ['4. Leave a cell blank to skip that day for that person.'],
+    ['5. Re-uploading the same day overwrites the previous value (safe to correct mistakes).'],
+  ]), 'Read me');
+  XLSX.writeFile(wb, 'NoonFleet_Attendance_Template.xlsx');
+}
+function handleAttFile(file) {
+  if (!file) return;
+  const fb = document.getElementById('att-fb');
+  if (fb) fb.innerHTML = `<div class="alert alert-i"><i class="ti ti-loader"></i> Reading ${file.name}…</div>`;
+  parseFile(file, raw => {
+    if (!raw || raw.length < 2) { if (fb) fb.innerHTML = `<div class="alert alert-e">File is empty or unreadable.</div>`; return; }
+    const hdr = raw[0].map(h => h);
+    const idIdx = hdr.findIndex(h => /employee\s*id|emp\s*id|empid|staff\s*id/i.test(String(h || '')));
+    if (idIdx === -1) { if (fb) fb.innerHTML = `<div class="alert alert-e">No "Employee ID" column found in the first row.</div>`; return; }
+    // every column that parses as a date is a day column
+    const dateCols = hdr.map((h, i) => ({ i, date: parseAttDate(h) })).filter(c => c.date && c.i !== idIdx);
+    if (!dateCols.length) { if (fb) fb.innerHTML = `<div class="alert alert-e">No date columns found. Use headers like 2026-06-25.</div>`; return; }
+    const rows = [];
+    for (let r = 1; r < raw.length; r++) {
+      const empId = String(raw[r][idIdx] || '').trim();
+      if (!empId) continue;
+      for (const c of dateCols) {
+        const val = String(raw[r][c.i] || '').trim();
+        if (val) rows.push({ empId, date: c.date, status: val });
+      }
+    }
+    S.attRows = rows;
+    S.attStep = 2;
+    R();
+  });
+}
+async function doAttImport() {
+  if (!S.attRows || !S.attRows.length) return;
+  try {
+    const res = await api('POST', '/attendance/bulk', { rows: S.attRows });
+    S.attSummary = await api('GET', '/attendance/summary');
+    try { S.attAll = await api('GET', '/attendance'); } catch (e) {}
+    S.attRows = null; S.attStep = 1;
+    auditLog(`Attendance uploaded: +${res.added||0}, ~${res.updated||0}`);
+    R();
+    alert(`✓ Attendance saved.\n\nNew: ${res.added||0}\nUpdated: ${res.updated||0}\nSkipped: ${res.skipped||0}${res.unknown&&res.unknown.length?`\n\nUnknown IDs (not in HRMS): ${res.unknown.join(', ')}`:''}`);
+  } catch (e) { alert('Error: ' + e.message); }
+}
+function attStat(icon, color, bg, label, val, sub) {
+  return `<div class="stat">
+    <div style="width:44px;height:44px;border-radius:12px;background:${bg};color:${color};display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px"><i class="ti ${icon}"></i></div>
+    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${val}</div>
+    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${label}</div>
+    ${sub?`<div style="font-size:11.5px;color:var(--faint);margin-top:6px">${sub}</div>`:''}
+  </div>`;
+}
+function renderAttendancePage() {
+  const canUp = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_attendance');
+  const s = S.attSummary || {};
+  const lastStr = s.lastDate ? fmtDate(s.lastDate) : '—';
+  const recent = S.attAll || [];
+  const empName = id => { const e = (S.employees||[]).find(x => x.id === id); return e ? (e.name + ' · ' + (e.empId||'')) : id; };
+
+  const summary = `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+    ${attStat('ti-user-check','var(--green)','var(--green-light)','Present', s.present ?? '—', s.lastDate?('as of '+lastStr):'no data yet')}
+    ${attStat('ti-user-off','var(--red)','#FCEBEB','Absent', s.absent ?? '—', s.lastDate?('as of '+lastStr):'')}
+    ${attStat('ti-calendar-event','var(--amber)','#FAEEDA','On leave', s.leave ?? '—', s.lastDate?('as of '+lastStr):'')}
+    ${attStat('ti-clock-pause','#687872','#F1EFE8','Week off', s.off ?? '—', s.lastDate?('as of '+lastStr):'')}
+    ${attStat('ti-calendar-stats','#185FA5','#E6F1FB','Last updated', lastStr, (s.markedOnLast||0)+' marked that day')}
+  </div>`;
+
+  const uploadCard = canUp ? `<div class="card">
+    <div class="card-head"><h3>Upload attendance</h3>
+      <button class="btn b" onclick="downloadAttTemplate()"><i class="ti ti-download"></i> Download template</button>
+    </div>
+    <div class="card-body">
+      ${S.attStep === 2 && S.attRows ? `
+        <div class="alert alert-s"><i class="ti ti-checks"></i><div>Parsed <b>${S.attRows.length}</b> attendance entries from your file. Review below, then import.</div></div>
+        <div class="tbl-wrap" style="max-height:320px;overflow:auto"><table><thead><tr><th>Employee ID</th><th>Date</th><th>Status</th></tr></thead>
+          <tbody>${S.attRows.slice(0,200).map(r => `<tr><td>${r.empId}</td><td>${fmtDate(r.date)}</td><td>${attBadge(normAttClient(r.status))}</td></tr>`).join('')}</tbody></table></div>
+        ${S.attRows.length>200?`<p style="font-size:11px;color:var(--muted);margin-top:6px">Showing first 200 of ${S.attRows.length}.</p>`:''}
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn" onclick="S.attRows=null;S.attStep=1;R()">Cancel</button>
+          <button class="btn g" onclick="doAttImport()"><i class="ti ti-upload"></i> Import ${S.attRows.length} entries</button>
+        </div>`
+      : `<div class="upload-zone" onclick="document.getElementById('attfile').click()">
+          <i class="ti ti-calendar-up" style="font-size:26px;color:var(--muted)"></i>
+          <div style="margin-top:8px;font-size:13px;font-weight:600">Click to select your attendance file</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Excel/CSV · Employee ID + date columns (P / A / L / O). Bulk days supported.</div>
+        </div>
+        <input type="file" id="attfile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleAttFile(this.files[0])">
+        <div id="att-fb" style="margin-top:10px"></div>`}
+    </div>
+  </div>` : '';
+
+  const recentCard = `<div class="card">
+    <div class="card-head"><h3>Recent attendance</h3><span style="font-size:11px;color:var(--muted)">${recent.length} record${recent.length!==1?'s':''} (latest first)</span></div>
+    <div class="tbl-wrap">${recent.length===0
+      ? `<p style="text-align:center;padding:2rem;color:var(--muted)">No attendance uploaded yet. Download the template, fill it in, and upload.</p>`
+      : `<table><thead><tr><th>Employee</th><th>Date</th><th>Status</th><th>Updated</th></tr></thead>
+      <tbody>${recent.slice(0,300).map(a => `<tr><td>${empName(a.employeeId)}</td><td>${fmtDate(a.date)}</td><td>${attBadge(a.status)}</td><td style="font-size:11px;color:var(--muted)">${a.updatedBy||''}</td></tr>`).join('')}</tbody></table>`}
+    </div>
+  </div>`;
+
+  return `<div style="margin-bottom:1.4rem"><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">Attendance</h1><p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">Daily present / absent / leave tracking${s.lastDate?` &mdash; as of ${lastStr}`:''}</p></div>` + summary + uploadCard + recentCard;
+}
+// client-side status normaliser (mirror of the server's, for the preview table)
+function normAttClient(v) {
+  const s = String(v||'').trim().toLowerCase();
+  if (['p','present','pr','1','y','yes','wfh','work'].includes(s)) return 'Present';
+  if (['a','absent','ab','0','n','no'].includes(s)) return 'Absent';
+  if (['l','leave','lv','al','sl'].includes(s)) return 'Leave';
+  if (['o','off','wo','weekoff','week off','holiday','h'].includes(s)) return 'Off';
+  return s ? s.charAt(0).toUpperCase()+s.slice(1) : '';
+}
+
 /* ─── Data Export (offline workflow) ───────────────────────── */
 function dlCurrentData(fmt0) {
   const ECOLS = EMP_COLS.concat(CFG.empFields.map(f => ({ k: 'cf_' + f.key, l: f.label, r: false })));
@@ -1475,7 +1693,17 @@ function renderLeaves() {
   const all      = S.leaves || [];
   const filtered = S.leaveFilter === 'All' ? all : all.filter(l => l.status === S.leaveFilter);
   const canL = () => S.user?.isSuperAdmin || (S.user?.permissions || []).includes('approve_leaves');
-  return `<div style="display:flex;gap:6px;margin-bottom:1.1rem">
+  const pend = all.filter(l => l.status === 'Pending').length;
+  const appr = all.filter(l => l.status === 'Approved').length;
+  const rej  = all.filter(l => l.status === 'Rejected').length;
+  const daysAppr = all.filter(l => l.status === 'Approved').reduce((s, l) => s + (+l.days || 0), 0);
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:1.25rem">
+    ${_dCard('ti-calendar-event','#185FA5','#E6F1FB','Total requests', all.length.toLocaleString(), '', '')}
+    ${_dCard('ti-clock','var(--amber)','#FAEEDA','Pending', pend.toLocaleString(), 'awaiting decision', '')}
+    ${_dCard('ti-calendar-check','var(--green)','var(--green-light)','Approved', appr.toLocaleString(), daysAppr+' days total', '')}
+    ${_dCard('ti-calendar-x','var(--red)','#FCEBEB','Rejected', rej.toLocaleString(), '', '')}
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:1.1rem">
     ${['All','Pending','Approved','Rejected'].map(f =>
       `<button class="btn ${S.leaveFilter===f?'g':''}" onclick="S.leaveFilter='${f}';R()">${f}</button>`
     ).join('')}
@@ -1553,7 +1781,16 @@ function renderCertModal() {
 /* ─── Payroll Page ─────────────────────────────────────────── */
 function renderPayrollPage() {
   const ps = S.payslips || [];
-  return `<div class="card">
+  const totGross = ps.reduce((s,p)=>s + +(p.data?.['Gross Salary']||0),0);
+  const totNet   = ps.reduce((s,p)=>s + +(p.data?.['Employee Net Pay']||0),0);
+  const months   = new Set(ps.map(p=>p.month)).size;
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:1.25rem">
+    ${_dCard('ti-file-invoice','#185FA5','#E6F1FB','Published payslips', ps.length.toLocaleString(), '', '')}
+    ${_dCard('ti-calendar-month','#7A5AF8','#EEEAFB','Pay periods', months.toLocaleString(), '', '')}
+    ${_dCard('ti-cash','var(--green)','var(--green-light)','Total gross', aed(totGross), '', '')}
+    ${_dCard('ti-wallet','var(--green)','var(--green-light)','Total net pay', aed(totNet), '', '')}
+  </div>
+  <div class="card">
     <div class="card-head">
       <h3>${ps.length} published payslip${ps.length!==1?'s':''}</h3>
       <button class="btn g" onclick="setNav('import');S.importTab='payroll';R()"><i class="ti ti-upload"></i> Upload payroll</button>
@@ -2086,14 +2323,16 @@ function renderEmpPortal() {
   const navs = [
     ['profile',       'ti-user',          'My Profile'],
     ['leaves',        'ti-calendar-event','My Leaves'],
+    ['attendance',    'ti-calendar-check','My Attendance'],
     ['payroll',       'ti-cash',          'My Payslips'],
     ['documents',     'ti-folder',        'My Documents'],
     ['notifications', 'ti-bell',          'Notifications']
   ];
- 
+
   let content = '';
   if      (tab === 'profile')       content = renderEmpSelfProfile(emp, prob);
   else if (tab === 'leaves')        content = renderEmpLeavesTab(emp, myLeaves, bal, prob);
+  else if (tab === 'attendance')    content = renderEmpAttendanceTab();
   else if (tab === 'payroll')       content = renderEmpPayslipsTab(myPayslips);
   else if (tab === 'documents')     content = renderEmpDocsTab(myDocs);
   else if (tab === 'notifications') content = renderNotifsTab(myNotifs);
@@ -2101,7 +2340,7 @@ function renderEmpPortal() {
   return `<div class="app-layout">
     ${S.sideOpen ? `<div class="sidebar-overlay show" onclick="S.sideOpen=false;R()"></div>` : ''}
     <aside class="sidebar ${S.sideOpen ? 'open' : ''}">
-      <div class="sidebar-brand"><img src="${LOGO}" alt="Noon Fleet" style="height:36px;width:auto;margin-bottom:6px;display:block"/><small>Employee Portal</small></div>
+      <div class="sidebar-brand"><span class="logo-chip"><img src="${LOGO}" alt="Noon Fleet" style="height:30px;width:auto;display:block"/></span><small>Employee Portal</small></div>
       ${navs.map(([k, ic, lbl]) => `
         <div class="nav-link ${tab===k?'active':''}" onclick="S.profileTab='${k}';S.sideOpen=false;R()">
           <i class="ti ${ic}"></i>${lbl}
@@ -2122,7 +2361,7 @@ function renderEmpPortal() {
       <div class="topbar">
         <div style="display:flex;align-items:center;min-width:0">
           <button class="burger" onclick="S.sideOpen=!S.sideOpen;R()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
-          <h2 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${{profile:'My profile',leaves:'My leaves',payroll:'My payslips',documents:'My documents',notifications:'Notifications'}[tab] || ''}</h2>
+          <h2 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${{profile:'My profile',leaves:'My leaves',attendance:'My attendance',payroll:'My payslips',documents:'My documents',notifications:'Notifications'}[tab] || ''}</h2>
         </div>
         <div class="topbar-actions">
           ${tab==='leaves' && !prob && emp?.status !== 'Inactive'
@@ -2289,6 +2528,26 @@ function renderEmpDocsTab(docs) {
       <div class="alert alert-i" style="margin-bottom:1rem"><i class="ti ti-info-circle"></i><div>Tap any document to open it. Your documents are uploaded and managed by HR — contact them if something is missing or needs updating.</div></div>
       ${docChecklist(docs, { isAdmin: false, canUpload: false, uploadModal: 'uploadDocSelf' })}
     </div>
+  </div>`;
+}
+
+function renderEmpAttendanceTab() {
+  const recs = (S.attendance || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const mRecs = recs.filter(r => String(r.date).slice(0, 7) === thisMonth);
+  const count = (list, st) => list.filter(r => r.status === st).length;
+  const cell = (color, lbl, val) => `<div class="ltcard" style="text-align:center"><div style="font-size:26px;font-weight:800;color:${color};line-height:1">${val}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${lbl}</div></div>`;
+  if (!recs.length) return `<div class="card"><div class="card-body"><div style="text-align:center;padding:2.5rem;color:var(--muted)"><i class="ti ti-calendar-off" style="font-size:32px;display:block;margin-bottom:1rem"></i>No attendance has been recorded for you yet.<br><span style="font-size:12px">HR uploads attendance — it will appear here once marked.</span></div></div></div>`;
+  return `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.1rem">
+    ${cell('var(--green)','Present this month', count(mRecs,'Present'))}
+    ${cell('var(--red)','Absent this month', count(mRecs,'Absent'))}
+    ${cell('var(--amber)','On leave', count(mRecs,'Leave'))}
+    ${cell('#687872','Week offs', count(mRecs,'Off'))}
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>My attendance history</h3><span style="font-size:11px;color:var(--muted)">${recs.length} day${recs.length!==1?'s':''} recorded</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Status</th></tr></thead>
+      <tbody>${recs.slice(0,200).map(r => { const d = new Date(r.date); const dow = isNaN(d) ? '' : d.toLocaleDateString('en-US',{weekday:'long'}); return `<tr><td>${fmtDate(r.date)}</td><td style="color:var(--muted)">${dow}</td><td>${attBadge(r.status)}</td></tr>`; }).join('')}</tbody></table></div>
   </div>`;
 }
  
@@ -2627,12 +2886,20 @@ async function setNav(n) {
   }
   if (n === 'accommodation') { await loadAccommodation(true); R(); return; }
   if (n === 'assets') { await loadAssets(true); R(); return; }
+  if (n === 'attendance') {
+    S.attStep = 1; S.attRows = null;
+    if (!S.employees) { try { S.employees = await api('GET', '/employees'); } catch (e) {} }
+    try { S.attSummary = await api('GET', '/attendance/summary'); } catch (e) {}
+    try { S.attAll = await api('GET', '/attendance'); } catch (e) { S.attAll = []; }
+    R(); return;
+  }
   await loadData(false);
   R();
 }
  
 async function viewEmp(id) {
-  const emp = (S.employees || []).find(e => e.id === id) || await api('GET', `/employees/${id}`);
+  // Always fetch the full single record so the profile has the photo (stripped from the list for speed).
+  let emp; try { emp = await api('GET', `/employees/${id}`); } catch (e) { emp = (S.employees || []).find(e => e.id === id); }
   S.viewEmp = emp;
   if (!S.leaves)    S.leaves    = await api('GET', '/leaves');
   if (!S.payslips)  S.payslips  = await api('GET', '/payslips');
@@ -3167,6 +3434,8 @@ const ALL_PERMISSIONS = [
   ['view_documents',      'View documents'],
   ['upload_documents',    'Upload / manage documents'],
   ['review_documents',    'Review documents (approve / reject)'],
+  ['view_attendance',     'View attendance'],
+  ['upload_attendance',   'Upload / manage attendance'],
   ['view_accommodation',  'View accommodation & allocations'],
   ['assign_beds',         'Assign / vacate beds'],
   ['manage_accommodation','Manage camps & rooms'],
@@ -3203,6 +3472,7 @@ const PERM_GROUPS = [
   ['Leave',            ['view_leaves', 'approve_leaves']],
   ['Payroll',          ['view_payroll', 'manage_payroll']],
   ['Documents',        ['view_documents', 'upload_documents', 'review_documents']],
+  ['Attendance',       ['view_attendance', 'upload_attendance']],
   ['Accommodation',    ['view_accommodation', 'assign_beds', 'manage_accommodation']],
   ['Fleet assets',     ['view_assets', 'assign_assets', 'manage_assets', 'import_assets']],
   ['Onboarding dates', ['update_induction_date', 'update_medical_date', 'update_biometric_date', 'update_eid_date', 'update_license_date', 'update_deployment_date']],
@@ -3384,12 +3654,12 @@ function renderAccommodation() {
   const totalCap = camps.reduce((s, c) => s + (+c.capacity || 0), 0);
   const totalOcc = allocs.length;
   const tab = S.accTab || 'rooms';
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-    <div class="stat"><div class="lbl">Camps</div><div class="val">${camps.length}</div></div>
-    <div class="stat"><div class="lbl">Rooms</div><div class="val">${rooms.length}</div></div>
-    <div class="stat"><div class="lbl">Total beds</div><div class="val">${totalCap}</div></div>
-    <div class="stat"><div class="lbl">Occupied</div><div class="val" style="color:var(--amber)">${totalOcc}</div></div>
-    <div class="stat"><div class="lbl">Vacant</div><div class="val" style="color:var(--green)">${Math.max(0, totalCap - totalOcc)}</div></div>
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    ${_dCard('ti-building-community','#185FA5','#E6F1FB','Camps', camps.length.toLocaleString(), '', '')}
+    ${_dCard('ti-door','#7A5AF8','#EEEAFB','Rooms', rooms.length.toLocaleString(), '', '')}
+    ${_dCard('ti-bed','#185FA5','#E6F1FB','Total beds', totalCap.toLocaleString(), '', '')}
+    ${_dCard('ti-user-check','var(--amber)','#FAEEDA','Occupied', totalOcc.toLocaleString(), '', '')}
+    ${_dCard('ti-bed-off','var(--green)','var(--green-light)','Vacant', Math.max(0, totalCap - totalOcc).toLocaleString(), '', '')}
   </div>
   <div class="tabs-bar">
     <div class="tab-btn ${tab==='rooms'?'active':''}" onclick="S.accTab='rooms';R()">Camps &amp; Rooms</div>
@@ -3994,12 +4264,12 @@ function renderAssets() {
   const cb = counts('bike'), cs = counts('sim'), co = counts('other');
   const s = S.assetSummary || {};
   const regA = (s.registrationAlerts || []), insA = (s.insuranceAlerts || []);
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-    <div class="stat"><div class="lbl">Bikes</div><div class="val">${cb.total}</div></div>
-    <div class="stat"><div class="lbl">SIMs</div><div class="val">${cs.total}</div></div>
-    <div class="stat"><div class="lbl">Other assets</div><div class="val">${co.total}</div></div>
-    <div class="stat"><div class="lbl">Assigned</div><div class="val" style="color:var(--blue)">${cb.assigned + cs.assigned + co.assigned}</div></div>
-    <div class="stat"><div class="lbl">Available</div><div class="val" style="color:var(--green)">${cb.available + cs.available + co.available}</div></div>
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    ${_dCard('ti-motorbike','#185FA5','#E6F1FB','Bikes', cb.total.toLocaleString(), '', '')}
+    ${_dCard('ti-device-mobile','#7A5AF8','#EEEAFB','SIMs', cs.total.toLocaleString(), '', '')}
+    ${_dCard('ti-package','var(--amber)','#FAEEDA','Other assets', co.total.toLocaleString(), '', '')}
+    ${_dCard('ti-user-check','var(--blue)','#E6F1FB','Assigned', (cb.assigned + cs.assigned + co.assigned).toLocaleString(), '', '')}
+    ${_dCard('ti-circle-check','var(--green)','var(--green-light)','Available', (cb.available + cs.available + co.available).toLocaleString(), '', '')}
   </div>
   ${tab === 'bike' && (regA.length || insA.length) ? `<div class="card" style="margin-bottom:1.25rem"><div class="card-head"><h3><i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Expiry alerts (≤30 days)</h3></div>
     <div class="tbl-wrap"><table><thead><tr><th style="width:18%">Bike ID</th><th style="width:16%">Plate</th><th style="width:22%">Type</th><th style="width:22%">Expiry</th><th style="width:22%">Holder</th></tr></thead><tbody>
@@ -4514,6 +4784,146 @@ async function init() {
  
 init();
  
+</script>
+<script>
+/* ============================================================
+   Noon Fleet HRMS — Tweaks panel
+   Three expressive controls that reshape the whole feel.
+   Mounted on <body> (outside #root) so it survives R() re-renders.
+   All effects flow through design tokens + two override <style>s.
+   ============================================================ */
+(function () {
+  var LS = { accent: 'tw_accent', density: 'tw_density', shape: 'tw_shape' };
+
+  /* ── Accent moods: each recolours the entire brand palette ── */
+  var ACCENTS = {
+    noon:     { label: 'Noon',     dot: '#3E18A8', green:'#3E18A8', dark:'#2A1178', light:'#ECE8FA', b2:'#5B34D6', ink:'#17123A', ink2:'#221A52', yellow:'#FFDD00' },
+    indigo:   { label: 'Indigo',   dot: '#3538CD', green:'#3538CD', dark:'#252A9E', light:'#E7E8FB', b2:'#5457E6', ink:'#12142E', ink2:'#1C1F44', yellow:'#4FD1C5' },
+    royal:    { label: 'Royal',    dot: '#7A1FA2', green:'#7A1FA2', dark:'#5B1580', light:'#F3E8FA', b2:'#A23DC8', ink:'#241236', ink2:'#331B4B', yellow:'#F6C453' },
+    graphite: { label: 'Graphite', dot: '#4B3F8F', green:'#4B3F8F', dark:'#332B66', light:'#ECEBF3', b2:'#6A5DB8', ink:'#0E1020', ink2:'#191A2E', yellow:'#A78BFA' }
+  };
+
+  /* ── Density: reshapes the app's spatial rhythm ── */
+  var DENSITY = {
+    compact: 'body{font-size:13px}.page{padding:1rem}.card-body{padding:1rem}.card-head{padding:.65rem 1rem}.stat{padding:.8rem}.stats-row{gap:8px}td{padding:7px 10px}th{padding:7px 10px}.nav-link{padding:7px 1.4rem}.card{margin-bottom:.8rem}.info-cell{padding:.7rem .85rem}',
+    cozy: '',
+    spacious: '.page{padding:2.3rem}.card-body{padding:1.8rem}.card-head{padding:1.3rem 1.6rem}.stat{padding:1.4rem}.stats-row{gap:18px}td{padding:15px 16px}th{padding:13px 16px}.nav-link{padding:13px 1.5rem}.card{margin-bottom:1.6rem}.info-cell{padding:1.3rem 1.4rem}'
+  };
+
+  /* ── Shape: global corner language ── */
+  var SHAPE = {
+    sharp: { vars:{ '--r-sm':'2px','--r':'3px','--r-lg':'5px' },
+      css:'.stat{border-radius:4px}.auth-box{border-radius:6px!important}.btn,.btn-primary{border-radius:4px!important}.badge{border-radius:4px}.avatar{border-radius:5px}.avatar.lg{border-radius:6px}.role-switch,.role-btn{border-radius:4px}.logo-chip{border-radius:5px}.field input,.field select,.field textarea{border-radius:4px}.modal{border-radius:6px}' },
+    rounded: { vars:{ '--r-sm':'9px','--r':'13px','--r-lg':'18px' },
+      css:'.stat{border-radius:14px}' },
+    soft: { vars:{ '--r-sm':'14px','--r':'20px','--r-lg':'28px' },
+      css:'.stat{border-radius:24px}.auth-box{border-radius:30px!important}.btn{border-radius:14px!important}.btn-primary{border-radius:16px!important}.avatar.lg{border-radius:26px}.role-switch{border-radius:16px}.role-btn{border-radius:13px}.logo-chip{border-radius:18px}.field input,.field select,.field textarea{border-radius:13px}.modal{border-radius:24px}' }
+  };
+
+  var state = {
+    accent:  localStorage.getItem(LS.accent)  || 'noon',
+    density: localStorage.getItem(LS.density) || 'cozy',
+    shape:   localStorage.getItem(LS.shape)   || 'rounded'
+  };
+
+  function styleEl(id) {
+    var s = document.getElementById(id);
+    if (!s) { s = document.createElement('style'); s.id = id; document.head.appendChild(s); }
+    return s;
+  }
+
+  function apply() {
+    var root = document.documentElement.style;
+    var a = ACCENTS[state.accent] || ACCENTS.noon;
+    root.setProperty('--green', a.green);
+    root.setProperty('--green-dark', a.dark);
+    root.setProperty('--green-light', a.light);
+    root.setProperty('--brand', a.green);
+    root.setProperty('--brand-2', a.b2);
+    root.setProperty('--ink', a.ink);
+    root.setProperty('--ink-2', a.ink2);
+    root.setProperty('--yellow', a.yellow);
+
+    styleEl('tweak-density').textContent = DENSITY[state.density] || '';
+
+    var sh = SHAPE[state.shape] || SHAPE.rounded;
+    var shVars = '';
+    for (var k in sh.vars) shVars += k + ':' + sh.vars[k] + ';';
+    styleEl('tweak-shape').textContent = ':root{' + shVars + '}' + sh.css;
+
+    // reflect active buttons in the panel
+    document.querySelectorAll('.tw-seg[data-group]').forEach(function (btn) {
+      btn.classList.toggle('on', state[btn.dataset.group] === btn.dataset.val);
+    });
+  }
+
+  function set(group, val) {
+    state[group] = val;
+    localStorage.setItem(LS[group], val);
+    apply();
+  }
+  window.__setTweak = set;
+
+  function seg(group, opts) {
+    return '<div class="tw-segrow">' + opts.map(function (o) {
+      return '<button class="tw-seg" data-group="' + group + '" data-val="' + o[0] + '" onclick="__setTweak(\'' + group + '\',\'' + o[0] + '\')">' + o[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function build() {
+    if (document.getElementById('tw-root')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'tw-root';
+    wrap.innerHTML =
+      '<style>' +
+      '#tw-root{position:fixed;right:20px;bottom:20px;z-index:990;font-family:"Plus Jakarta Sans",system-ui,sans-serif}' +
+      '#tw-fab{display:inline-flex;align-items:center;gap:8px;background:var(--green,#3E18A8);color:#fff;border:none;border-radius:999px;padding:11px 17px;font:600 13px/1 "Plus Jakarta Sans",system-ui;cursor:pointer;box-shadow:0 12px 28px -8px rgba(20,10,60,.55)}' +
+      '#tw-fab i{font-size:16px}' +
+      '#tw-panel{position:absolute;right:0;bottom:56px;width:296px;background:#fff;border:1px solid rgba(30,20,80,.12);border-radius:18px;box-shadow:0 30px 70px -20px rgba(10,5,40,.5);padding:16px 16px 14px;transform-origin:bottom right;transition:opacity .16s,transform .16s;opacity:0;transform:scale(.94) translateY(8px);pointer-events:none}' +
+      '#tw-root.open #tw-panel{opacity:1;transform:none;pointer-events:auto}' +
+      '.tw-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}' +
+      '.tw-hd b{font-size:14px;font-weight:800;letter-spacing:-.01em;color:#1a1533}' +
+      '.tw-hd span{font-size:10.5px;color:#9c98ae;font-weight:600}' +
+      '.tw-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6a6580;margin:14px 0 7px}' +
+      '.tw-lbl:first-of-type{margin-top:4px}' +
+      '.tw-segrow{display:flex;gap:5px;background:#f0eef8;border-radius:11px;padding:4px}' +
+      '.tw-seg{flex:1;padding:7px 4px;border:none;background:transparent;border-radius:8px;font:600 11.5px/1.2 "Plus Jakarta Sans",system-ui;color:#6a6580;cursor:pointer;transition:background .12s,color .12s}' +
+      '.tw-seg:hover{color:#1a1533}' +
+      '.tw-seg.on{background:#fff;color:var(--green,#3E18A8);box-shadow:0 2px 6px rgba(30,20,80,.14)}' +
+      '.tw-dots{display:flex;gap:4px;margin-top:8px;justify-content:flex-end}' +
+      '.tw-reset{background:none;border:none;color:#9c98ae;font:600 11px "Plus Jakarta Sans",system-ui;cursor:pointer;padding:0}' +
+      '.tw-reset:hover{color:var(--green,#3E18A8)}' +
+      '</style>' +
+      '<div id="tw-panel">' +
+        '<div class="tw-hd"><b>Appearance</b><span>reshape the feel</span></div>' +
+        '<div class="tw-lbl">Accent mood</div>' +
+        seg('accent', [['noon','Noon'],['indigo','Indigo'],['royal','Royal'],['graphite','Graphite']]) +
+        '<div class="tw-lbl">Density</div>' +
+        seg('density', [['compact','Compact'],['cozy','Cozy'],['spacious','Spacious']]) +
+        '<div class="tw-lbl">Shape</div>' +
+        seg('shape', [['sharp','Sharp'],['rounded','Rounded'],['soft','Soft']]) +
+        '<div class="tw-dots"><button class="tw-reset" onclick="__resetTweaks()">Reset to Noon default</button></div>' +
+      '</div>' +
+      '<button id="tw-fab"><i class="ti ti-adjustments-horizontal"></i> Tweaks</button>';
+    document.body.appendChild(wrap);
+    document.getElementById('tw-fab').onclick = function (e) {
+      e.stopPropagation(); wrap.classList.toggle('open');
+    };
+    document.addEventListener('click', function (e) {
+      if (wrap.classList.contains('open') && !wrap.contains(e.target)) wrap.classList.remove('open');
+    });
+    apply();
+  }
+
+  window.__resetTweaks = function () {
+    set('accent','noon'); set('density','cozy'); set('shape','rounded');
+  };
+
+  // Tokens must be live immediately (before panel DOM) so first paint is themed.
+  apply();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+  else build();
+})();
 </script>
 </body>
 </html>
