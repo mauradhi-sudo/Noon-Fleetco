@@ -13,11 +13,18 @@ let engine;
 
 if (process.env.DATABASE_URL) {
   engine = 'postgres';
-  const { Pool } = require('pg');
+  const { Pool, types } = require('pg');
+  // Parse BIGINT (OID 20) as a JS number so OTP-expiry comparisons work without string coercion.
+  try { types.setTypeParser(20, v => parseInt(v, 10)); } catch (e) {}
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false },
+    max: +(process.env.PG_POOL_MAX || 10),   // reuse connections instead of reconnecting per request
+    keepAlive: true,                          // keep sockets warm (avoids re-handshake latency on Render)
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
   });
+  pool.on('error', (err) => { console.error('PG pool error:', err.message); });
   // translate ? placeholders to $1..$n
   query = async (sql, params = []) => {
     let i = 0;

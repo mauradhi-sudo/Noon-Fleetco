@@ -88,6 +88,14 @@ const rowToRoom  = (r) => Object.assign(J(r.data, {}), { id: r.id, campId: r.cam
 const rowToAlloc = (r) => Object.assign(J(r.data, {}), { id: r.id, employeeId: r.employeeid ?? r.employeeId, campId: r.campid ?? r.campId, roomId: r.roomid ?? r.roomId, bed: String(r.bed ?? ''), checkIn: r.checkin ?? r.checkIn });
 const rowToAsset = (r) => Object.assign(J(r.data, {}), { id: r.id, type: r.type || 'other', code: r.code || '', name: r.name || '', status: r.status || 'Available', assignedTo: r.assignedto ?? r.assignedTo ?? null, assignedDate: r.assigneddate ?? r.assignedDate ?? null });
 
+// Lightweight employee lookup — id/empId/name only. Pages that just map names (accommodation,
+// assets) must NOT pull every employee's full JSON data + base64 photo; over networked Postgres
+// that transfer/parse is the main cause of slow page loads. This selects 3 columns instead.
+async function empLite() {
+  const r = await query('SELECT id, empId, name FROM employees', []);
+  return r.rows.map(x => ({ id: x.id, empId: x.empid ?? x.empId, name: x.name }));
+}
+
 async function audit(user, action) { try { await query('INSERT INTO audit (t, usr, action) VALUES (?, ?, ?)', [new Date().toLocaleString(), user || 'System', action]); } catch (e) { } }
 async function notify(employeeId, type, title, message) {
   try { await query('INSERT INTO notifications (id, employeeId, isRead, data) VALUES (?, ?, 0, ?)', [uid('N'), employeeId, JSON.stringify({ type, title, message, createdAt: today() })]); } catch (e) {}
@@ -524,7 +532,7 @@ app.delete('/api/accommodation/camps/:id', auth, async (req, res) => {
 app.get('/api/accommodation/rooms', auth, async (req, res) => {
   try {
     const camps  = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
-    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const emps   = await empLite();
     const allocs = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc);
     let rooms    = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
     if (req.query.campId) rooms = rooms.filter(r => r.campId === req.query.campId);
@@ -594,7 +602,7 @@ app.get('/api/accommodation/allocations', auth, async (req, res) => {
   try {
     const camps  = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
     const rooms  = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
-    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const emps   = await empLite();
     let allocs   = (await query('SELECT * FROM bed_allocations', [])).rows.map(rowToAlloc);
     if (req.user.role === 'employee') allocs = allocs.filter(a => a.employeeId === req.user.employeeId);
     res.json(allocs.map(a => enrichAlloc(a, camps, rooms, emps)));
@@ -677,7 +685,7 @@ app.get('/api/accommodation/history', auth, async (req, res) => {
   try {
     const camps = (await query('SELECT * FROM camps', [])).rows.map(rowToCamp);
     const rooms = (await query('SELECT * FROM acc_rooms', [])).rows.map(rowToRoom);
-    const emps  = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const emps  = await empLite();
     let rows = (await query('SELECT * FROM acc_history', [])).rows.map(h => ({
       id: h.id, employeeId: h.employeeid ?? h.employeeId, campId: h.campid ?? h.campId,
       roomId: h.roomid ?? h.roomId, bed: String(h.bed ?? ''), checkIn: h.checkin ?? h.checkIn, checkOut: h.checkout ?? h.checkOut
@@ -714,7 +722,7 @@ function enrichAsset(a, emps) {
 
 app.get('/api/assets', auth, async (req, res) => {
   try {
-    const emps = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const emps = await empLite();
     let assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset);
     if (req.user.role === 'employee') assets = assets.filter(a => a.assignedTo === req.user.employeeId);
     if (req.query.type)       assets = assets.filter(a => a.type === req.query.type);
@@ -728,7 +736,7 @@ app.get('/api/assets', auth, async (req, res) => {
 // Dashboard counts + registration/insurance expiry alerts
 app.get('/api/assets/summary', auth, async (req, res) => {
   try {
-    const emps   = (await query('SELECT * FROM employees', [])).rows.map(rowToEmp);
+    const emps   = await empLite();
     const assets = (await query('SELECT * FROM assets', [])).rows.map(rowToAsset);
     const byType = t => assets.filter(a => a.type === t);
     const countStatus = (arr, s) => arr.filter(a => a.status === s).length;

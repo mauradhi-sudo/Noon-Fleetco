@@ -511,10 +511,11 @@ async function api(method, path, data, isFormData) {
 async function loadData(force) {
   try {
     if (S.screen === 'admin') {
+      // Only what the dashboard needs up front — keeps login fast. Documents load lazily
+      // (on the Documents page / employee profile) since that dataset can be large.
       if (!S.employees     || force) S.employees     = await api('GET', '/employees');
       if (!S.leaves        || force) S.leaves        = await api('GET', '/leaves');
       if (!S.payslips      || force) S.payslips      = await api('GET', '/payslips');
-      if (!S.documents     || force) S.documents     = await api('GET', '/documents');
       if (!S.assetSummary  || force) { try { S.assetSummary = await api('GET', '/assets/summary'); } catch (e) {} }
       if (!S.assets        || force) { try { S.assets = await api('GET', '/assets'); } catch (e) {} }
       if (!S.attSummary    || force) { try { S.attSummary = await api('GET', '/attendance/summary'); } catch (e) {} }
@@ -2814,6 +2815,7 @@ async function setNav(n) {
   }
   if (n === 'accommodation') { await loadAccommodation(true); R(); return; }
   if (n === 'assets') { await loadAssets(true); R(); return; }
+  if (n === 'documents') { if (!S.documents) { try { S.documents = await api('GET', '/documents'); } catch (e) { S.documents = []; } } R(); return; }
   if (n === 'attendance') {
     S.attStep = 1; S.attRows = null;
     if (!S.employees) { try { S.employees = await api('GET', '/employees'); } catch (e) {} }
