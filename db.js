@@ -148,6 +148,16 @@ CREATE TABLE IF NOT EXISTS acc_history (
   checkOut TEXT,
   data TEXT
 );
+CREATE TABLE IF NOT EXISTS attendance (
+  id TEXT PRIMARY KEY,
+  employeeId TEXT,
+  date TEXT,
+  status TEXT,
+  updatedAt TEXT,
+  updatedBy TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_emp_date ON attendance (employeeId, date);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (date);
 `;
 
 async function init() {

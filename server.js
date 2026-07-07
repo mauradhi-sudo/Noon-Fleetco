@@ -139,7 +139,7 @@ app.post('/api/auth/employee/login', async (req, res) => { try { const empId = S
 
 app.post('/api/auth/employee/verify-otp', async (req, res) => { try { const empId = String(req.body.empId || '').trim().toUpperCase(); if (!await checkOtp('emp:' + empId, req.body.otp)) return res.status(401).json({ error: 'Incorrect code' }); const r = await query('SELECT * FROM employees WHERE UPPER(empId) = ?', [empId]); if (!r.rows.length) return res.status(404).json({ error: 'Employee not found' }); const e = rowToEmp(r.rows[0]); await audit(e.name, 'Employee login'); res.json({ token: token({ role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }), role: 'employee', employeeId: e.id, empId: e.empId, name: e.name }); } catch (e) { res.status(500).json({ error: e.message }); } });
 
-app.get('/api/employees', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM employees WHERE id = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToEmp)); } const r = await query('SELECT * FROM employees ORDER BY empId', []); res.json(r.rows.map(rowToEmp)); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/employees', auth, async (req, res) => { try { if (req.user.role === 'employee') { const r = await query('SELECT * FROM employees WHERE id = ?', [req.user.employeeId]); return res.json(r.rows.map(rowToEmp)); } const r = await query('SELECT * FROM employees ORDER BY empId', []); /* strip heavy base64 photos from the full list for speed — the profile page fetches the single record with its photo */ const list = r.rows.map(rowToEmp).map(e => { if (e.photo) { const { photo, ...rest } = e; rest.hasPhoto = true; return rest; } return e; }); res.json(list); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.get('/api/employees/export', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'view_reports')) return res.status(403).json({ error: 'No permission' });  const r = await query('SELECT * FROM employees ORDER BY empId', []); const emps = r.rows.map(rowToEmp).map(e => ({ 'Employee ID': e.empId || '', 'Name': e.name || '', 'Email': e.email || '', 'Passport': e.passportNo || '', 'Status': e.status || 'Active', 'Position': e.position || '', 'Department': e.department || '', 'Location': e.location || '' })); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(emps); XLSX.utils.book_append_sheet(wb, ws, 'Employees'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.setHeader('Content-Disposition', `attachment; filename="employees_${today()}.xlsx"`); res.send(buf); } catch (e) { res.status(500).json({ error: e.message }); } });
 
@@ -291,6 +291,79 @@ app.patch('/api/documents/:id/review', auth, async (req, res) => {
 });
 
 app.delete('/api/documents/:id', auth, async (req, res) => { try { if (!isSuperAdmin(req) && !hasPermission(req, 'upload_documents')) return res.status(403).json({ error: 'No permission' }); const r = await query('SELECT * FROM documents WHERE id = ?', [req.params.id]); if (!r.rows.length) return res.status(404).json({ error: 'Not found' }); const d = r.rows[0]; await query('DELETE FROM documents WHERE id = ?', [req.params.id]); try { const fp = path.join(UPLOAD_DIR, d.filename); if (fs.existsSync(fp)) fs.unlinkSync(fp); } catch (e) {} res.json({ message: 'Deleted' }); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+/* ─── Attendance ──────────────────────────────────────────── */
+const rowToAtt = (r) => ({ id: r.id, employeeId: r.employeeid ?? r.employeeId, date: r.date, status: r.status, updatedAt: r.updatedat ?? r.updatedAt, updatedBy: r.updatedby ?? r.updatedBy });
+function normAttStatus(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return '';
+  if (['p', 'present', 'pr', '1', 'y', 'yes', 'wfh', 'work'].includes(s)) return 'Present';
+  if (['a', 'absent', 'ab', '0', 'n', 'no'].includes(s)) return 'Absent';
+  if (['l', 'leave', 'lv', 'al', 'sl'].includes(s)) return 'Leave';
+  if (['o', 'off', 'wo', 'weekoff', 'week off', 'holiday', 'h'].includes(s)) return 'Off';
+  // fall back: capitalise whatever was given
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+app.get('/api/attendance', auth, async (req, res) => {
+  try {
+    if (req.user.role === 'employee') {
+      const r = await query('SELECT * FROM attendance WHERE employeeId = ? ORDER BY date DESC', [req.user.employeeId]);
+      return res.json(r.rows.map(rowToAtt));
+    }
+    if (req.query.employeeId) {
+      const r = await query('SELECT * FROM attendance WHERE employeeId = ? ORDER BY date DESC', [req.query.employeeId]);
+      return res.json(r.rows.map(rowToAtt));
+    }
+    const r = await query('SELECT * FROM attendance ORDER BY date DESC LIMIT 2000', []);
+    res.json(r.rows.map(rowToAtt));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/attendance/summary', auth, async (req, res) => {
+  try {
+    const r = await query('SELECT date, status FROM attendance', []);
+    const rows = r.rows;
+    let lastDate = '';
+    for (const x of rows) { if (x.date && x.date > lastDate) lastDate = x.date; }
+    const onLast = rows.filter(x => x.date === lastDate);
+    const countBy = (list, st) => list.filter(x => (x.status || '') === st).length;
+    res.json({
+      lastDate,
+      totalRecords: rows.length,
+      present: countBy(onLast, 'Present'),
+      absent: countBy(onLast, 'Absent'),
+      leave: countBy(onLast, 'Leave'),
+      off: countBy(onLast, 'Off'),
+      markedOnLast: onLast.length,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/attendance/bulk', auth, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req) && !hasPermission(req, 'upload_attendance')) return res.status(403).json({ error: 'No permission' });
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ error: 'No attendance rows to import' });
+    // map Employee ID (business id) → internal id
+    const emps = (await query('SELECT id, empId FROM employees', [])).rows;
+    const byNo = {}; for (const e of emps) { const no = (e.empid ?? e.empId); if (no) byNo[String(no).toUpperCase()] = e.id; }
+    const stamp = now();
+    let added = 0, updated = 0, skipped = 0; const unknown = new Set();
+    for (const row of rows) {
+      const empNo = String(row.empId || '').trim().toUpperCase();
+      const date = String(row.date || '').trim();
+      const status = normAttStatus(row.status);
+      const internal = byNo[empNo];
+      if (!internal || !date || !status) { skipped++; if (empNo && !internal) unknown.add(empNo); continue; }
+      const ex = await query('SELECT id FROM attendance WHERE employeeId = ? AND date = ?', [internal, date]);
+      if (ex.rows.length) { await query('UPDATE attendance SET status = ?, updatedAt = ?, updatedBy = ? WHERE id = ?', [status, stamp, req.user.name, ex.rows[0].id]); updated++; }
+      else { await query('INSERT INTO attendance (id, employeeId, date, status, updatedAt, updatedBy) VALUES (?, ?, ?, ?, ?, ?)', [uid('AT'), internal, date, status, stamp, req.user.name]); added++; }
+    }
+    await audit(req.user.name, `Attendance bulk upload: +${added}, ~${updated}, skipped ${skipped}`);
+    res.json({ message: 'Imported', added, updated, skipped, unknown: [...unknown].slice(0, 20) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/notifications', auth, async (req, res) => { try { const id = req.user.role === 'employee' ? req.user.employeeId : '__none__'; const r = await query('SELECT * FROM notifications WHERE employeeId = ? ORDER BY id DESC', [id]); res.json(r.rows.map(rowToNotif)); } catch (e) { res.status(500).json({ error: e.message }); } });
 

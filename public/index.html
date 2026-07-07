@@ -6,9 +6,6 @@
 <title>Noon Fleet HRMS</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjEwMCIgZmlsbD0iIzNFMThBOCIvPgogIDx0ZXh0IHg9IjEwMCIgeT0iOTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXNpemU9IjQ2IiBsZXR0ZXItc3BhY2luZz0iLTIiIGZpbGw9IiNGRkUxMDAiPm5vb248L3RleHQ+CiAgPHRleHQgeD0iMTAwIiB5PSIxNDIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgSGVsdmV0aWNhLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXN0eWxlPSJpdGFsaWMiIGZvbnQtc2l6ZT0iNTAiIGxldHRlci1zcGFjaW5nPSIxIiBmaWxsPSIjRkZGRkZGIj5GTEVFVDwvdGV4dD4KPC9zdmc+Cg=="/>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.40.0/tabler-icons.min.css" rel="stylesheet"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -20,73 +17,60 @@
 *{box-sizing:border-box;margin:0;padding:0}
  
 :root{
-  /* Brand — Noon Fleet purple + yellow.
-     NOTE: the --green* names are kept so the whole app re-themes
-     from these three values; they now hold the brand purple. */
-  --green:       #3E18A8;   /* brand purple (primary)   */
-  --green-dark:  #2A1178;   /* deep purple (hover/press) */
-  --green-light: #ECE8FA;   /* pale purple tint (fills)  */
-  --brand:       #3E18A8;
-  --brand-2:     #5B34D6;
-  --yellow:      #FFDD00;   /* noon yellow accent        */
-  --yellow-deep: #F2C200;
-  --ink:         #17123A;   /* dark sidebar base         */
-  --ink-2:       #221a52;
+  /* Brand colours */
+  --green:       #1D9E75;
+  --green-dark:  #0F6E56;
+  --green-light: #E1F5EE;
   --red:         #E24B4A;
   --amber:       #EF9F27;
   --blue:        #378ADD;
   /* Surfaces */
-  --bg:      #f3f3f8;
+  --bg:      #f6f7f6;
   --surface: #fff;
-  --border:  rgba(30,20,80,0.09);
-  --border-strong: rgba(30,20,80,0.15);
-  --hover:   #f7f6fc;
+  --border:  rgba(15,30,25,0.09);
+  --border-strong: rgba(15,30,25,0.14);
+  --hover:   #f7f9f8;
   /* Text */
-  --text:  #1a1533;
-  --muted: #6a6580;
-  --faint: #9c98ae;
+  --text:  #16201c;
+  --muted: #687872;
+  --faint: #9aa6a1;
   /* Depth + shape */
-  --shadow-sm: 0 1px 2px rgba(30,20,80,.06);
-  --shadow:    0 2px 12px rgba(30,20,80,.07), 0 1px 2px rgba(30,20,80,.05);
-  --shadow-lg: 0 18px 44px -12px rgba(30,20,80,.20);
-  --r-sm: 9px; --r: 13px; --r-lg: 18px;
+  --shadow-sm: 0 1px 2px rgba(16,40,30,.05);
+  --shadow:    0 2px 10px rgba(16,40,30,.06), 0 1px 2px rgba(16,40,30,.05);
+  --shadow-lg: 0 12px 36px rgba(16,40,30,.12);
+  --r-sm: 8px; --r: 12px; --r-lg: 16px;
 }
  
 body{
-  font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background:var(--bg);
   color:var(--text);
   font-size:14px;
-  -webkit-font-smoothing:antialiased;
-  text-rendering:optimizeLegibility;
 }
  
 /* ─── Auth Screen ─────────────────────────────────────────── */
-.auth-screen{position:relative;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;overflow:hidden;background:radial-gradient(circle at 18% 22%, #4a1fb8 0%, transparent 55%), radial-gradient(circle at 88% 78%, #5b34d6 0%, transparent 52%), linear-gradient(155deg,#2a1178 0%,#17123a 100%)}
-.auth-screen::before{content:'';position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(255,221,0,.16),transparent 70%);bottom:-190px;left:-140px;pointer-events:none}
-.auth-screen::after{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:24px 24px;opacity:.6;pointer-events:none}
-.auth-box{position:relative;z-index:1;background:var(--surface);border:1px solid rgba(255,255,255,.5);border-radius:22px;padding:2.6rem 2.4rem;width:100%;max-width:412px;box-shadow:0 34px 80px -22px rgba(8,4,34,.65),0 4px 14px rgba(8,4,34,.24)}
-.brand-row{display:flex;align-items:center;gap:12px;margin-bottom:1.8rem}
-.brand-icon{width:44px;height:44px;background:var(--green);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
-.brand-title{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
+.brand-row{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.brand-icon{width:44px;height:44px;background:var(--green);border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0}
+.brand-title{font-size:18px;font-weight:600}
 .brand-sub{font-size:12px;color:var(--muted)}
-.role-switch{display:flex;gap:4px;background:#f0eef8;border-radius:11px;padding:4px;margin-bottom:1.5rem}
-.role-btn{flex:1;padding:8px;border:none;background:transparent;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .12s,color .12s}
-.role-btn.active{background:var(--surface);color:var(--green);box-shadow:0 2px 6px rgba(30,20,80,.12)}
-.auth-hint{font-size:11.5px;color:var(--faint);margin-top:12px;line-height:1.7;text-align:center}
-.error-msg{background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px}
+.role-switch{display:flex;gap:4px;background:#f0f0ee;border-radius:9px;padding:4px;margin-bottom:1.5rem}
+.role-btn{flex:1;padding:7px;border:none;background:transparent;border-radius:7px;cursor:pointer;font-size:13px;color:var(--muted)}
+.role-btn.active{background:var(--surface);color:var(--text);font-weight:500;box-shadow:0 1px 4px rgba(0,0,0,0.1)}
+.auth-hint{font-size:11px;color:var(--faint);margin-top:10px;line-height:1.7;text-align:center}
+.error-msg{background:#FCEBEB;color:#A32D2D;border-radius:7px;padding:9px 12px;font-size:12px;margin-bottom:10px}
  
 /* ─── Form Fields ─────────────────────────────────────────── */
 .field{margin-bottom:1rem}
 .field label{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px}
-.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:9px;font-size:14px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(62,24,168,.13)}
+.field input,.field select,.field textarea{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);font-family:inherit;transition:border-color 0.15s}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--green)}
 .field textarea{resize:vertical;min-height:80px}
  
 /* ─── Buttons ─────────────────────────────────────────────── */
-.btn-primary{width:100%;padding:12px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 18px -8px rgba(62,24,168,.6);transition:background .13s,transform .1s}
+.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer}
 .btn-primary:hover{background:var(--green-dark)}
-.btn-primary:active{transform:translateY(1px)}
 .btn{padding:7px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text);display:inline-flex;align-items:center;gap:5px}
 .btn:hover{background:#f5f5f3}
 .btn.g{background:var(--green);color:#fff;border:none}
@@ -102,64 +86,60 @@ body{
 .app-layout{display:flex;min-height:100vh}
  
 /* Sidebar */
-.sidebar{width:240px;background:linear-gradient(185deg,var(--ink-2),var(--ink));display:flex;flex-direction:column;flex-shrink:0;padding-top:4px}
-.sidebar-brand{padding:1.35rem 1.4rem 1.2rem;border-bottom:1px solid rgba(255,255,255,.09)}
-.sidebar-brand .logo-chip{display:inline-flex;background:#fff;border-radius:12px;padding:7px 12px;box-shadow:0 6px 16px rgba(0,0,0,.28)}
+.sidebar{width:235px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-brand{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)}
 .sidebar-brand h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
-.sidebar-brand .dot{width:8px;height:8px;background:var(--yellow);border-radius:50%}
-.sidebar-brand small{font-size:11px;color:rgba(255,255,255,.5);display:block;margin-top:11px;letter-spacing:.02em}
-.nav-link{display:flex;align-items:center;gap:11px;padding:10px 1.4rem;cursor:pointer;font-size:13px;color:rgba(255,255,255,.66);border-left:2.5px solid transparent;position:relative;user-select:none;font-weight:500;transition:background .12s,color .12s}
-.nav-link:hover{background:rgba(255,255,255,.06);color:#fff}
-.nav-link:hover i{color:#fff}
-.nav-link.active{background:rgba(255,255,255,.09);color:#fff;border-left-color:var(--yellow);font-weight:700}
-.nav-link.active i{color:var(--yellow)}
-.nav-link i{font-size:17px;flex-shrink:0;color:rgba(255,255,255,.5);transition:color .12s}
-.nav-badge{position:absolute;right:12px;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:700}
-.sidebar-footer{margin-top:auto;padding:1rem 1.4rem;border-top:1px solid rgba(255,255,255,.09)}
-.user-chip{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.sidebar-brand .dot{width:8px;height:8px;background:var(--green);border-radius:50%}
+.sidebar-brand small{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+.nav-link{display:flex;align-items:center;gap:10px;padding:9px 1.5rem;cursor:pointer;font-size:13px;color:var(--muted);border-left:2px solid transparent;position:relative;user-select:none}
+.nav-link:hover{background:#f9f9f7;color:var(--text)}
+.nav-link.active{background:var(--green-light);color:var(--green);border-left-color:var(--green);font-weight:500}
+.nav-link i{font-size:16px;flex-shrink:0}
+.nav-badge{position:absolute;right:12px;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:600}
+.sidebar-footer{margin-top:auto;padding:1rem 1.5rem;border-top:1px solid var(--border)}
+.user-chip{display:flex;align-items:center;gap:9px;margin-bottom:9px}
 .user-chip-text{font-size:12px}
-.user-chip-text b{display:block;font-weight:600;color:#fff}
-.user-chip-text span{color:rgba(255,255,255,.5)}
-.logout-btn{width:100%;padding:8px;background:transparent;border:1px solid rgba(255,255,255,.18);border-radius:9px;cursor:pointer;font-size:12px;color:rgba(255,255,255,.72);font-weight:500;transition:background .12s,color .12s}
-.logout-btn:hover{background:rgba(255,255,255,.09);color:#fff}
+.user-chip-text b{display:block;font-weight:600}
+.user-chip-text span{color:var(--muted)}
+.logout-btn{width:100%;padding:7px;background:transparent;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;color:var(--muted)}
+.logout-btn:hover{background:#f5f5f3}
  
 /* Main area */
 .main-area{flex:1;display:flex;flex-direction:column;overflow:auto;min-width:0}
-.topbar{background:rgba(255,255,255,.85);backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--border);padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50}
-.topbar h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar h2{font-size:16px;font-weight:600}
 .topbar-actions{display:flex;align-items:center;gap:8px}
 .page{padding:1.5rem}
  
 /* ─── Avatar ──────────────────────────────────────────────── */
-.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#C9B8F5,#A98DED);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#2A1178;flex-shrink:0;background-size:cover;background-position:center}
-.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#D4C6F8,#A98DED);box-shadow:inset 0 0 0 1px rgba(42,17,120,.1);background-size:cover;background-position:center;color:#2A1178}
+.avatar{width:32px;height:32px;border-radius:50%;background:#9FE1CB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#085041;flex-shrink:0;background-size:cover;background-position:center}
+.avatar.lg{width:68px;height:68px;font-size:24px;border-radius:18px;background:linear-gradient(135deg,#B8ECDA,#9FE1CB);box-shadow:inset 0 0 0 1px rgba(8,80,65,.08);background-size:cover;background-position:center}
 .avatar.has-photo{color:transparent}
 .avatar-wrap{position:relative;flex-shrink:0}
 .avatar-wrap .photo-edit{position:absolute;right:-3px;bottom:-3px;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;border:2.5px solid var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;box-shadow:var(--shadow-sm);transition:background .12s}
 .avatar-wrap .photo-edit:hover{background:var(--green-dark)}
  
 /* ─── Cards ───────────────────────────────────────────────── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow)}
-.card-head{padding:1.05rem 1.35rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-head h3{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:1.1rem;box-shadow:var(--shadow-sm)}
+.card-head{padding:1rem 1.35rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h3{font-size:14px;font-weight:600;letter-spacing:-.01em}
 .card-body{padding:1.35rem}
  
 /* ─── Stats Row ───────────────────────────────────────────── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:1.25rem}
-.stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.05rem;box-shadow:var(--shadow-sm);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
-.stat.clickable{cursor:pointer}
-.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 12px 26px -10px rgba(62,24,168,.28);border-color:rgba(62,24,168,.35)}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(20,40,80,.10);border-color:var(--green)}
 .stat.clickable:active{transform:translateY(-1px)}
-.stat .lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;letter-spacing:.01em}
-.stat .val{font-size:22px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat .lbl{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.stat .val{font-size:22px;font-weight:700}
  
 /* ─── Table ───────────────────────────────────────────────── */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
-th{font-size:10.5px;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;background:#f6f5fb;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
-td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th{font-size:11px;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;background:#fafaf8;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:var(--hover)}
+tr:hover td{background:#fafaf8}
  
 /* ─── Badges ──────────────────────────────────────────────── */
 .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
@@ -180,7 +160,7 @@ tr:hover td{background:var(--hover)}
 .modal-foot{padding:.9rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-grid .full{grid-column:1/-1}
-.section-label{font-size:11px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:0.06em;margin:1.5rem 0 .8rem;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:1.4rem 0 .7rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .sec-head{display:flex;align-items:center;gap:9px;margin:1.5rem 0 .85rem}
 .sec-head .sec-ico{width:30px;height:30px;border-radius:9px;background:var(--green-light);color:var(--green-dark);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .sec-head h4{font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--text)}
@@ -196,7 +176,7 @@ tr:hover td{background:var(--hover)}
 .leave-hero .lh-divider{width:1px;align-self:stretch;background:var(--border)}
 .leave-hero .lh-stat{font-size:12px;color:var(--muted)}
 .leave-hero .lh-stat b{display:block;font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px}
-.ltcard{background:var(--hover);border:1px solid var(--border);border-radius:11px;padding:.875rem;margin-bottom:8px}
+.ltcard{background:#fafaf8;border:1px solid var(--border);border-radius:9px;padding:.875rem;margin-bottom:8px}
 .ltcard h4{font-size:12px;font-weight:600;margin-bottom:6px}
 .lt-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
  
@@ -214,10 +194,10 @@ tr:hover td{background:var(--hover)}
 .info-cell{background:var(--surface);padding:1rem 1.1rem}
 .info-cell .lbl{font-size:10.5px;color:var(--faint);font-weight:600;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
 .info-cell .val{font-size:13.5px;font-weight:500;word-break:break-word;color:var(--text);line-height:1.4}
-.tabs-bar{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:1.35rem;overflow-x:auto;box-shadow:var(--shadow-sm)}
-.tab-btn{padding:9px 15px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;border-radius:9px;white-space:nowrap;transition:color .12s,background .12s}
-.tab-btn:hover{color:var(--text);background:var(--hover)}
-.tab-btn.active{color:#fff;background:var(--green);font-weight:700;box-shadow:0 5px 12px -4px rgba(62,24,168,.5)}
+.tabs-bar{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:1.35rem;overflow-x:auto}
+.tab-btn{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color .12s,border-color .12s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:600}
  
 /* ─── Payslip PDF ─────────────────────────────────────────── */
 .ps-pdf{background:#fff;color:#000;font-family:Arial,sans-serif;max-width:720px;border:1px solid #ccc;margin:0 auto;border-radius:4px;overflow:hidden}
@@ -231,7 +211,7 @@ tr:hover td{background:var(--hover)}
 .ps-col-title{background:#f0f0f0;font-size:12px;font-weight:700;padding:7px 12px;border-bottom:1px solid #ddd}
 .ps-col-right{border-left:1px solid #222}
 .ps-line{display:flex;justify-content:space-between;padding:5px 12px;font-size:11px;border-bottom:0.5px solid #f0f0f0}
-.ps-line.total{font-weight:700;font-size:12px;color:var(--green);background:#faf9fe}
+.ps-line.total{font-weight:700;font-size:12px;color:var(--green);background:#f9fff9}
 .ps-summary{padding:10px 12px;font-size:11px}
 .ps-sum-line{display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid #eee}
 .ps-sum-line.final{font-weight:700;color:var(--green);font-size:13px}
@@ -249,7 +229,7 @@ tr:hover td{background:var(--hover)}
 .imp-step-num{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;color:var(--muted)}
 .imp-step.active .imp-step-num,.imp-step.done .imp-step-num{background:var(--green);border-color:var(--green);color:#fff}
 .imp-step-lbl{font-size:11px;font-weight:500;color:var(--muted);line-height:1.3}
-.imp-step.active .imp-step-lbl{color:var(--green-dark)}
+.imp-step.active .imp-step-lbl{color:#085041}
 .import-tab-bar{display:flex;gap:5px;background:#f0f0ee;border-radius:9px;padding:4px;margin-bottom:1.1rem}
 .import-tab{flex:1;padding:8px;border:none;background:transparent;border-radius:7px;cursor:pointer;font-size:13px;color:var(--muted);font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px}
 .import-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.1)}
@@ -681,9 +661,9 @@ function renderLogin() {
         ${S.otpSending ? 'Sending code…' : 'Send login code <i class=\'ti ti-send\'></i>'}
       </button>
       <p class="auth-hint">A 6-digit one-time code will be emailed to you.</p>`
-    : `<div style="background:var(--green-light);border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:var(--green-dark)">
+    : `<div style="background:#E1F5EE;border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:#0F6E56">
         <i class="ti ti-mail"></i> Code sent to <b>${S.otpEmail}</b>
-        <button onclick="S.otpStep='email';S.loginErr='';R()" style="float:right;background:none;border:none;color:var(--green-dark);cursor:pointer;font-size:12px">Change email</button>
+        <button onclick="S.otpStep='email';S.loginErr='';R()" style="float:right;background:none;border:none;color:#0F6E56;cursor:pointer;font-size:12px">Change email</button>
       </div>
       <div class="field">
         <label>6-digit login code</label>
@@ -706,9 +686,9 @@ function renderLogin() {
     ${S.loginErr ? `<div class="error-msg"><i class="ti ti-alert-circle"></i> ${S.loginErr}</div>` : ''}
     <button class="btn-primary" onclick="doLogin()">Continue <i class="ti ti-arrow-right"></i></button>
     <p class="auth-hint">Step 1 of 2 — a 6-digit code will be emailed to you</p>`
-    : `<div style="background:var(--green-light);border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:var(--green-dark)">
+    : `<div style="background:#E1F5EE;border-radius:9px;padding:12px 14px;font-size:13px;margin-bottom:1rem;color:#0F6E56">
         <i class="ti ti-mail"></i> Code sent to <b>${S.empOtpEmail||'your email'}</b>
-        <button onclick="S.empOtpStep='creds';S.loginErr='';R()" style="float:right;background:none;border:none;color:var(--green-dark);cursor:pointer;font-size:12px">Back</button>
+        <button onclick="S.empOtpStep='creds';S.loginErr='';R()" style="float:right;background:none;border:none;color:#0F6E56;cursor:pointer;font-size:12px">Back</button>
       </div>
       <div class="field">
         <label>6-digit login code</label>
@@ -777,15 +757,13 @@ function renderAdmin() {
   else if (S.nav === 'empview' && S.viewEmp)     content = renderEmpDetail();
   else if (S.nav === 'psview'  && S.viewPayslip) content = renderPsPage();
  
-  content = pageHeader(S.nav) + content;
- 
   const initials = (S.user?.name||'AD').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
  
   return `<div class="app-layout">
     ${S.sideOpen ? `<div class="sidebar-overlay show" onclick="S.sideOpen=false;R()"></div>` : ''}
     <aside class="sidebar ${S.sideOpen ? 'open' : ''}">
       <div class="sidebar-brand">
-        <span class="logo-chip"><img src="${LOGO}" alt="Noon Fleet" style="height:30px;width:auto;display:block"/></span>
+        <img src="${LOGO}" alt="Noon Fleet" style="height:36px;width:auto;margin-bottom:6px;display:block"/>
         <small>${isSuperAdmin ? 'Super Admin' : 'Admin Portal'} · HRMS</small>
       </div>
       ${navs.map(([k, ic, lbl, cnt]) => `
@@ -836,46 +814,21 @@ function renderAdmin() {
 /* ─── Dashboard ────────────────────────────────────────────── */
 function setDashView(v) { S.dashView = v; R(); }
 
-/* Shared page header (title + subtitle) for the content pages.
-   Dashboard, Attendance, profile & payslip render their own headers, so skip those. */
-const PAGE_META = {
-  employees:     { t: 'Employees',        s: 'Full workforce directory & records' },
-  leaves:        { t: 'Leave management', s: 'Requests, approvals & balances' },
-  payroll:       { t: 'Payroll',          s: 'Published monthly payslips' },
-  documents:     { t: 'Documents',        s: 'Employee files & compliance records' },
-  accommodation: { t: 'Accommodation',    s: 'Camps, rooms & allocations' },
-  assets:        { t: 'Fleet assets',     s: 'Bikes, SIMs & equipment tracking' },
-  reports:       { t: 'Reports',          s: 'Export workforce & operations data' },
-  admins:        { t: 'Admin users',      s: 'Team roles & permissions' },
-  settings:      { t: 'Settings',         s: 'Custom fields & payroll configuration' },
-  audit:         { t: 'Audit log',        s: 'System activity history' },
-  import:        { t: 'Bulk import',      s: 'Upload employees, payroll & attendance' }
-};
-function pageHeader(nav) {
-  const m = PAGE_META[nav]; if (!m) return '';
-  return `<div style="margin-bottom:1.4rem"><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">${m.t}</h1><p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">${m.s}</p></div>`;
-}
-
 /* shared dashboard building blocks */
 function _dCard(icon, color, bg, lbl, val, sub, onclick) {
-  return `<div class="stat${onclick ? ' clickable' : ''}" style="${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
-    <div style="width:44px;height:44px;border-radius:12px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:22px;color:${color};margin-bottom:14px"><i class="ti ${icon}"></i></div>
-    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${val}</div>
-    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${lbl}</div>
-    ${sub ? `<div style="font-size:11.5px;color:var(--faint);margin-top:6px">${sub}</div>` : ''}
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+    <div style="min-width:0"><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div>${sub ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${sub}</div>` : ''}</div>
   </div>`;
 }
 function _progCard(icon, color, bg, lbl, have, total, onclick) {
   const pc = total ? Math.round(have / total * 100) : 0;
-  return `<div class="stat${onclick ? ' clickable' : ''}" style="${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="width:44px;height:44px;border-radius:12px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:22px;color:${color}"><i class="ti ${icon}"></i></div>
-      <span style="font-size:12.5px;font-weight:800;color:${color};font-variant-numeric:tabular-nums">${pc}%</span>
-    </div>
-    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${(have||0).toLocaleString()} <span style="font-size:13px;color:var(--faint);font-weight:600">/ ${(total||0).toLocaleString()}</span></div>
-    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${lbl}</div>
-    <div style="height:6px;margin-top:11px;border-radius:99px;background:rgba(30,20,80,.08);overflow:hidden"><div style="height:100%;width:${pc}%;border-radius:99px;background:${color}"></div></div>
-  </div>`;
+  return `<div class="stat${onclick ? ' clickable' : ''}" style="display:flex;align-items:center;gap:12px;${onclick ? 'cursor:pointer' : ''}" ${onclick ? `onclick="${onclick}"` : ''}>
+    <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+    <div style="flex:1;min-width:0"><div class="lbl">${lbl}</div>
+      <div class="val" style="font-size:20px">${(have||0).toLocaleString()} <span style="font-size:12px;color:var(--muted);font-weight:400">/ ${(total||0).toLocaleString()} &middot; ${pc}%</span></div>
+      <div class="leave-bar" style="height:6px;margin-top:6px"><div class="leave-fill" style="width:${pc}%;background:${color}"></div></div>
+    </div></div>`;
 }
 function _posBars(emps, label) {
   const byPos = {}; emps.forEach(e => { const k = e.position || 'Other'; byPos[k] = (byPos[k] || 0) + 1; });
@@ -895,15 +848,10 @@ function renderDashboard() {
   const allowed = dashTabsAllowed();
   let v = S.dashView || allowed[0];
   if (!allowed.includes(v)) v = allowed[0];
-  const titles = { hr: 'HR overview', onb: 'Onboarding overview', ops: 'Operations overview' };
-  const subs   = { hr: 'Workforce, leave & payroll snapshot', onb: 'Joining, documents & clearance progress', ops: 'Deployment pipeline & fleet assets' };
-  const tab = (k, label, icon) => allowed.includes(k) ? `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 17px;border-radius:9px;border:none;background:${v === k ? 'var(--green)' : 'transparent'};color:${v === k ? '#fff' : 'var(--muted)'};font-weight:${v === k ? '700' : '600'};font-size:13px;cursor:pointer;white-space:nowrap;${v === k ? 'box-shadow:0 5px 12px -4px rgba(62,24,168,.55)' : ''}"><i class="ti ${icon}"></i> ${label}</button>` : '';
-  const switcher = allowed.length > 1 ? `<div style="display:inline-flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px;box-shadow:var(--shadow-sm)">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>` : '';
-  const header = `<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:1.4rem">
-    <div><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">${titles[v] || 'Overview'}</h1>
-    <p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">${subs[v] || ''}</p></div>${switcher}</div>`;
+  const tab = (k, label, icon) => allowed.includes(k) ? `<button onclick="setDashView('${k}')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;border:1px solid ${v === k ? 'var(--green)' : 'var(--border)'};background:${v === k ? 'var(--green)' : '#fff'};color:${v === k ? '#fff' : 'var(--text)'};font-weight:600;font-size:13px;cursor:pointer"><i class="ti ${icon}"></i> ${label}</button>` : '';
+  const switcher = allowed.length > 1 ? `<div style="display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap">${tab('hr', 'HR', 'ti-users')}${tab('onb', 'Onboarding', 'ti-user-plus')}${tab('ops', 'Operations', 'ti-truck-delivery')}</div>` : '';
   const body = v === 'onb' ? renderDashONB() : v === 'ops' ? renderDashOps() : renderDashHR();
-  return header + body;
+  return switcher + body;
 }
 
 function renderDashONB() {
@@ -1004,7 +952,11 @@ function renderDashHR() {
   const posRows = Object.entries(byPos).sort((a, b) => b[1] - a[1]);
   const maxPos  = posRows.length ? posRows[0][1] : 1;
   const pcL = onLeave / (es.length || 1) * 100, pcI = inact.length / (es.length || 1) * 100;
-  const card = (icon, color, bg, lbl, val, key) => _dCard(icon, color, bg, lbl, val, '', `viewDashMetric('${key}')`);
+  const card = (icon, color, bg, lbl, val, key) => `
+    <div class="stat" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="viewDashMetric('${key}')">
+      <div style="width:42px;height:42px;border-radius:11px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:20px;color:${color};flex-shrink:0"><i class="ti ${icon}"></i></div>
+      <div><div class="lbl">${lbl}</div><div class="val" style="font-size:20px">${val}</div></div>
+    </div>`;
   return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(195px,1fr))">
     ${card('ti-users','#185FA5','#E6F1FB','Total employees',es.length.toLocaleString(),'total_emp')}
     ${card('ti-user-check','var(--green)','var(--green-light)','Active &amp; working',working.toLocaleString(),'active_emp')}
@@ -1341,12 +1293,7 @@ async function doAttImport() {
   } catch (e) { alert('Error: ' + e.message); }
 }
 function attStat(icon, color, bg, label, val, sub) {
-  return `<div class="stat">
-    <div style="width:44px;height:44px;border-radius:12px;background:${bg};color:${color};display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px"><i class="ti ${icon}"></i></div>
-    <div style="font-size:25px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05">${val}</div>
-    <div style="font-size:12.5px;color:var(--muted);font-weight:600;margin-top:5px">${label}</div>
-    ${sub?`<div style="font-size:11.5px;color:var(--faint);margin-top:6px">${sub}</div>`:''}
-  </div>`;
+  return `<div class="stat" style="border-left:3px solid ${color}"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="width:30px;height:30px;border-radius:8px;background:${bg};color:${color};display:flex;align-items:center;justify-content:center"><i class="ti ${icon}"></i></div><div class="lbl">${label}</div></div><div class="val">${val}</div>${sub?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${sub}</div>`:''}</div>`;
 }
 function renderAttendancePage() {
   const canUp = S.user?.isSuperAdmin || (S.user?.permissions||[]).includes('upload_attendance');
@@ -1396,7 +1343,7 @@ function renderAttendancePage() {
     </div>
   </div>`;
 
-  return `<div style="margin-bottom:1.4rem"><h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;color:var(--text)">Attendance</h1><p style="margin:4px 0 0;font-size:12.5px;color:var(--muted)">Daily present / absent / leave tracking${s.lastDate?` &mdash; as of ${lastStr}`:''}</p></div>` + summary + uploadCard + recentCard;
+  return summary + uploadCard + recentCard;
 }
 // client-side status normaliser (mirror of the server's, for the preview table)
 function normAttClient(v) {
@@ -1693,17 +1640,7 @@ function renderLeaves() {
   const all      = S.leaves || [];
   const filtered = S.leaveFilter === 'All' ? all : all.filter(l => l.status === S.leaveFilter);
   const canL = () => S.user?.isSuperAdmin || (S.user?.permissions || []).includes('approve_leaves');
-  const pend = all.filter(l => l.status === 'Pending').length;
-  const appr = all.filter(l => l.status === 'Approved').length;
-  const rej  = all.filter(l => l.status === 'Rejected').length;
-  const daysAppr = all.filter(l => l.status === 'Approved').reduce((s, l) => s + (+l.days || 0), 0);
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:1.25rem">
-    ${_dCard('ti-calendar-event','#185FA5','#E6F1FB','Total requests', all.length.toLocaleString(), '', '')}
-    ${_dCard('ti-clock','var(--amber)','#FAEEDA','Pending', pend.toLocaleString(), 'awaiting decision', '')}
-    ${_dCard('ti-calendar-check','var(--green)','var(--green-light)','Approved', appr.toLocaleString(), daysAppr+' days total', '')}
-    ${_dCard('ti-calendar-x','var(--red)','#FCEBEB','Rejected', rej.toLocaleString(), '', '')}
-  </div>
-  <div style="display:flex;gap:6px;margin-bottom:1.1rem">
+  return `<div style="display:flex;gap:6px;margin-bottom:1.1rem">
     ${['All','Pending','Approved','Rejected'].map(f =>
       `<button class="btn ${S.leaveFilter===f?'g':''}" onclick="S.leaveFilter='${f}';R()">${f}</button>`
     ).join('')}
@@ -1781,16 +1718,7 @@ function renderCertModal() {
 /* ─── Payroll Page ─────────────────────────────────────────── */
 function renderPayrollPage() {
   const ps = S.payslips || [];
-  const totGross = ps.reduce((s,p)=>s + +(p.data?.['Gross Salary']||0),0);
-  const totNet   = ps.reduce((s,p)=>s + +(p.data?.['Employee Net Pay']||0),0);
-  const months   = new Set(ps.map(p=>p.month)).size;
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:1.25rem">
-    ${_dCard('ti-file-invoice','#185FA5','#E6F1FB','Published payslips', ps.length.toLocaleString(), '', '')}
-    ${_dCard('ti-calendar-month','#7A5AF8','#EEEAFB','Pay periods', months.toLocaleString(), '', '')}
-    ${_dCard('ti-cash','var(--green)','var(--green-light)','Total gross', aed(totGross), '', '')}
-    ${_dCard('ti-wallet','var(--green)','var(--green-light)','Total net pay', aed(totNet), '', '')}
-  </div>
-  <div class="card">
+  return `<div class="card">
     <div class="card-head">
       <h3>${ps.length} published payslip${ps.length!==1?'s':''}</h3>
       <button class="btn g" onclick="setNav('import');S.importTab='payroll';R()"><i class="ti ti-upload"></i> Upload payroll</button>
@@ -2340,7 +2268,7 @@ function renderEmpPortal() {
   return `<div class="app-layout">
     ${S.sideOpen ? `<div class="sidebar-overlay show" onclick="S.sideOpen=false;R()"></div>` : ''}
     <aside class="sidebar ${S.sideOpen ? 'open' : ''}">
-      <div class="sidebar-brand"><span class="logo-chip"><img src="${LOGO}" alt="Noon Fleet" style="height:30px;width:auto;display:block"/></span><small>Employee Portal</small></div>
+      <div class="sidebar-brand"><img src="${LOGO}" alt="Noon Fleet" style="height:36px;width:auto;margin-bottom:6px;display:block"/><small>Employee Portal</small></div>
       ${navs.map(([k, ic, lbl]) => `
         <div class="nav-link ${tab===k?'active':''}" onclick="S.profileTab='${k}';S.sideOpen=false;R()">
           <i class="ti ${ic}"></i>${lbl}
@@ -3654,12 +3582,12 @@ function renderAccommodation() {
   const totalCap = camps.reduce((s, c) => s + (+c.capacity || 0), 0);
   const totalOcc = allocs.length;
   const tab = S.accTab || 'rooms';
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-    ${_dCard('ti-building-community','#185FA5','#E6F1FB','Camps', camps.length.toLocaleString(), '', '')}
-    ${_dCard('ti-door','#7A5AF8','#EEEAFB','Rooms', rooms.length.toLocaleString(), '', '')}
-    ${_dCard('ti-bed','#185FA5','#E6F1FB','Total beds', totalCap.toLocaleString(), '', '')}
-    ${_dCard('ti-user-check','var(--amber)','#FAEEDA','Occupied', totalOcc.toLocaleString(), '', '')}
-    ${_dCard('ti-bed-off','var(--green)','var(--green-light)','Vacant', Math.max(0, totalCap - totalOcc).toLocaleString(), '', '')}
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    <div class="stat"><div class="lbl">Camps</div><div class="val">${camps.length}</div></div>
+    <div class="stat"><div class="lbl">Rooms</div><div class="val">${rooms.length}</div></div>
+    <div class="stat"><div class="lbl">Total beds</div><div class="val">${totalCap}</div></div>
+    <div class="stat"><div class="lbl">Occupied</div><div class="val" style="color:var(--amber)">${totalOcc}</div></div>
+    <div class="stat"><div class="lbl">Vacant</div><div class="val" style="color:var(--green)">${Math.max(0, totalCap - totalOcc)}</div></div>
   </div>
   <div class="tabs-bar">
     <div class="tab-btn ${tab==='rooms'?'active':''}" onclick="S.accTab='rooms';R()">Camps &amp; Rooms</div>
@@ -4264,12 +4192,12 @@ function renderAssets() {
   const cb = counts('bike'), cs = counts('sim'), co = counts('other');
   const s = S.assetSummary || {};
   const regA = (s.registrationAlerts || []), insA = (s.insuranceAlerts || []);
-  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-    ${_dCard('ti-motorbike','#185FA5','#E6F1FB','Bikes', cb.total.toLocaleString(), '', '')}
-    ${_dCard('ti-device-mobile','#7A5AF8','#EEEAFB','SIMs', cs.total.toLocaleString(), '', '')}
-    ${_dCard('ti-package','var(--amber)','#FAEEDA','Other assets', co.total.toLocaleString(), '', '')}
-    ${_dCard('ti-user-check','var(--blue)','#E6F1FB','Assigned', (cb.assigned + cs.assigned + co.assigned).toLocaleString(), '', '')}
-    ${_dCard('ti-circle-check','var(--green)','var(--green-light)','Available', (cb.available + cs.available + co.available).toLocaleString(), '', '')}
+  return `<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+    <div class="stat"><div class="lbl">Bikes</div><div class="val">${cb.total}</div></div>
+    <div class="stat"><div class="lbl">SIMs</div><div class="val">${cs.total}</div></div>
+    <div class="stat"><div class="lbl">Other assets</div><div class="val">${co.total}</div></div>
+    <div class="stat"><div class="lbl">Assigned</div><div class="val" style="color:var(--blue)">${cb.assigned + cs.assigned + co.assigned}</div></div>
+    <div class="stat"><div class="lbl">Available</div><div class="val" style="color:var(--green)">${cb.available + cs.available + co.available}</div></div>
   </div>
   ${tab === 'bike' && (regA.length || insA.length) ? `<div class="card" style="margin-bottom:1.25rem"><div class="card-head"><h3><i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Expiry alerts (≤30 days)</h3></div>
     <div class="tbl-wrap"><table><thead><tr><th style="width:18%">Bike ID</th><th style="width:16%">Plate</th><th style="width:22%">Type</th><th style="width:22%">Expiry</th><th style="width:22%">Holder</th></tr></thead><tbody>
@@ -4784,146 +4712,6 @@ async function init() {
  
 init();
  
-</script>
-<script>
-/* ============================================================
-   Noon Fleet HRMS — Tweaks panel
-   Three expressive controls that reshape the whole feel.
-   Mounted on <body> (outside #root) so it survives R() re-renders.
-   All effects flow through design tokens + two override <style>s.
-   ============================================================ */
-(function () {
-  var LS = { accent: 'tw_accent', density: 'tw_density', shape: 'tw_shape' };
-
-  /* ── Accent moods: each recolours the entire brand palette ── */
-  var ACCENTS = {
-    noon:     { label: 'Noon',     dot: '#3E18A8', green:'#3E18A8', dark:'#2A1178', light:'#ECE8FA', b2:'#5B34D6', ink:'#17123A', ink2:'#221A52', yellow:'#FFDD00' },
-    indigo:   { label: 'Indigo',   dot: '#3538CD', green:'#3538CD', dark:'#252A9E', light:'#E7E8FB', b2:'#5457E6', ink:'#12142E', ink2:'#1C1F44', yellow:'#4FD1C5' },
-    royal:    { label: 'Royal',    dot: '#7A1FA2', green:'#7A1FA2', dark:'#5B1580', light:'#F3E8FA', b2:'#A23DC8', ink:'#241236', ink2:'#331B4B', yellow:'#F6C453' },
-    graphite: { label: 'Graphite', dot: '#4B3F8F', green:'#4B3F8F', dark:'#332B66', light:'#ECEBF3', b2:'#6A5DB8', ink:'#0E1020', ink2:'#191A2E', yellow:'#A78BFA' }
-  };
-
-  /* ── Density: reshapes the app's spatial rhythm ── */
-  var DENSITY = {
-    compact: 'body{font-size:13px}.page{padding:1rem}.card-body{padding:1rem}.card-head{padding:.65rem 1rem}.stat{padding:.8rem}.stats-row{gap:8px}td{padding:7px 10px}th{padding:7px 10px}.nav-link{padding:7px 1.4rem}.card{margin-bottom:.8rem}.info-cell{padding:.7rem .85rem}',
-    cozy: '',
-    spacious: '.page{padding:2.3rem}.card-body{padding:1.8rem}.card-head{padding:1.3rem 1.6rem}.stat{padding:1.4rem}.stats-row{gap:18px}td{padding:15px 16px}th{padding:13px 16px}.nav-link{padding:13px 1.5rem}.card{margin-bottom:1.6rem}.info-cell{padding:1.3rem 1.4rem}'
-  };
-
-  /* ── Shape: global corner language ── */
-  var SHAPE = {
-    sharp: { vars:{ '--r-sm':'2px','--r':'3px','--r-lg':'5px' },
-      css:'.stat{border-radius:4px}.auth-box{border-radius:6px!important}.btn,.btn-primary{border-radius:4px!important}.badge{border-radius:4px}.avatar{border-radius:5px}.avatar.lg{border-radius:6px}.role-switch,.role-btn{border-radius:4px}.logo-chip{border-radius:5px}.field input,.field select,.field textarea{border-radius:4px}.modal{border-radius:6px}' },
-    rounded: { vars:{ '--r-sm':'9px','--r':'13px','--r-lg':'18px' },
-      css:'.stat{border-radius:14px}' },
-    soft: { vars:{ '--r-sm':'14px','--r':'20px','--r-lg':'28px' },
-      css:'.stat{border-radius:24px}.auth-box{border-radius:30px!important}.btn{border-radius:14px!important}.btn-primary{border-radius:16px!important}.avatar.lg{border-radius:26px}.role-switch{border-radius:16px}.role-btn{border-radius:13px}.logo-chip{border-radius:18px}.field input,.field select,.field textarea{border-radius:13px}.modal{border-radius:24px}' }
-  };
-
-  var state = {
-    accent:  localStorage.getItem(LS.accent)  || 'noon',
-    density: localStorage.getItem(LS.density) || 'cozy',
-    shape:   localStorage.getItem(LS.shape)   || 'rounded'
-  };
-
-  function styleEl(id) {
-    var s = document.getElementById(id);
-    if (!s) { s = document.createElement('style'); s.id = id; document.head.appendChild(s); }
-    return s;
-  }
-
-  function apply() {
-    var root = document.documentElement.style;
-    var a = ACCENTS[state.accent] || ACCENTS.noon;
-    root.setProperty('--green', a.green);
-    root.setProperty('--green-dark', a.dark);
-    root.setProperty('--green-light', a.light);
-    root.setProperty('--brand', a.green);
-    root.setProperty('--brand-2', a.b2);
-    root.setProperty('--ink', a.ink);
-    root.setProperty('--ink-2', a.ink2);
-    root.setProperty('--yellow', a.yellow);
-
-    styleEl('tweak-density').textContent = DENSITY[state.density] || '';
-
-    var sh = SHAPE[state.shape] || SHAPE.rounded;
-    var shVars = '';
-    for (var k in sh.vars) shVars += k + ':' + sh.vars[k] + ';';
-    styleEl('tweak-shape').textContent = ':root{' + shVars + '}' + sh.css;
-
-    // reflect active buttons in the panel
-    document.querySelectorAll('.tw-seg[data-group]').forEach(function (btn) {
-      btn.classList.toggle('on', state[btn.dataset.group] === btn.dataset.val);
-    });
-  }
-
-  function set(group, val) {
-    state[group] = val;
-    localStorage.setItem(LS[group], val);
-    apply();
-  }
-  window.__setTweak = set;
-
-  function seg(group, opts) {
-    return '<div class="tw-segrow">' + opts.map(function (o) {
-      return '<button class="tw-seg" data-group="' + group + '" data-val="' + o[0] + '" onclick="__setTweak(\'' + group + '\',\'' + o[0] + '\')">' + o[1] + '</button>';
-    }).join('') + '</div>';
-  }
-
-  function build() {
-    if (document.getElementById('tw-root')) return;
-    var wrap = document.createElement('div');
-    wrap.id = 'tw-root';
-    wrap.innerHTML =
-      '<style>' +
-      '#tw-root{position:fixed;right:20px;bottom:20px;z-index:990;font-family:"Plus Jakarta Sans",system-ui,sans-serif}' +
-      '#tw-fab{display:inline-flex;align-items:center;gap:8px;background:var(--green,#3E18A8);color:#fff;border:none;border-radius:999px;padding:11px 17px;font:600 13px/1 "Plus Jakarta Sans",system-ui;cursor:pointer;box-shadow:0 12px 28px -8px rgba(20,10,60,.55)}' +
-      '#tw-fab i{font-size:16px}' +
-      '#tw-panel{position:absolute;right:0;bottom:56px;width:296px;background:#fff;border:1px solid rgba(30,20,80,.12);border-radius:18px;box-shadow:0 30px 70px -20px rgba(10,5,40,.5);padding:16px 16px 14px;transform-origin:bottom right;transition:opacity .16s,transform .16s;opacity:0;transform:scale(.94) translateY(8px);pointer-events:none}' +
-      '#tw-root.open #tw-panel{opacity:1;transform:none;pointer-events:auto}' +
-      '.tw-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}' +
-      '.tw-hd b{font-size:14px;font-weight:800;letter-spacing:-.01em;color:#1a1533}' +
-      '.tw-hd span{font-size:10.5px;color:#9c98ae;font-weight:600}' +
-      '.tw-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6a6580;margin:14px 0 7px}' +
-      '.tw-lbl:first-of-type{margin-top:4px}' +
-      '.tw-segrow{display:flex;gap:5px;background:#f0eef8;border-radius:11px;padding:4px}' +
-      '.tw-seg{flex:1;padding:7px 4px;border:none;background:transparent;border-radius:8px;font:600 11.5px/1.2 "Plus Jakarta Sans",system-ui;color:#6a6580;cursor:pointer;transition:background .12s,color .12s}' +
-      '.tw-seg:hover{color:#1a1533}' +
-      '.tw-seg.on{background:#fff;color:var(--green,#3E18A8);box-shadow:0 2px 6px rgba(30,20,80,.14)}' +
-      '.tw-dots{display:flex;gap:4px;margin-top:8px;justify-content:flex-end}' +
-      '.tw-reset{background:none;border:none;color:#9c98ae;font:600 11px "Plus Jakarta Sans",system-ui;cursor:pointer;padding:0}' +
-      '.tw-reset:hover{color:var(--green,#3E18A8)}' +
-      '</style>' +
-      '<div id="tw-panel">' +
-        '<div class="tw-hd"><b>Appearance</b><span>reshape the feel</span></div>' +
-        '<div class="tw-lbl">Accent mood</div>' +
-        seg('accent', [['noon','Noon'],['indigo','Indigo'],['royal','Royal'],['graphite','Graphite']]) +
-        '<div class="tw-lbl">Density</div>' +
-        seg('density', [['compact','Compact'],['cozy','Cozy'],['spacious','Spacious']]) +
-        '<div class="tw-lbl">Shape</div>' +
-        seg('shape', [['sharp','Sharp'],['rounded','Rounded'],['soft','Soft']]) +
-        '<div class="tw-dots"><button class="tw-reset" onclick="__resetTweaks()">Reset to Noon default</button></div>' +
-      '</div>' +
-      '<button id="tw-fab"><i class="ti ti-adjustments-horizontal"></i> Tweaks</button>';
-    document.body.appendChild(wrap);
-    document.getElementById('tw-fab').onclick = function (e) {
-      e.stopPropagation(); wrap.classList.toggle('open');
-    };
-    document.addEventListener('click', function (e) {
-      if (wrap.classList.contains('open') && !wrap.contains(e.target)) wrap.classList.remove('open');
-    });
-    apply();
-  }
-
-  window.__resetTweaks = function () {
-    set('accent','noon'); set('density','cozy'); set('shape','rounded');
-  };
-
-  // Tokens must be live immediately (before panel DOM) so first paint is themed.
-  apply();
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
-  else build();
-})();
 </script>
 </body>
 </html>
